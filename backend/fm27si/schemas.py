@@ -21,7 +21,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 FieldStatus = Literal["verified", "unconfirmed", "derived", "estimate"]
-ConnectorKind = Literal["live_memory", "save_file"]
+ConnectorKind = Literal["live_memory", "save_file", "synthetic"]
 
 
 class _Model(BaseModel):

@@ -31,6 +31,10 @@
     --attr-elite: 199 85% 38%;
     --pitch: 145 40% 92%;
     --pitch-line: 145 30% 75%;
+    /* Séries de gráficos (validadas: CVD, contraste, banda de luminosidade) */
+    --chart-1: 152 62% 30%;
+    --chart-2: 199 85% 38%;
+    --chart-ref: 215 14% 55%;
   }
   .dark {
     --background: 222 40% 7%;
@@ -58,6 +62,9 @@
     --attr-elite: 199 90% 62%;
     --pitch: 150 30% 13%;
     --pitch-line: 150 25% 25%;
+    --chart-1: 152 57% 38%;
+    --chart-2: 205 73% 55%;
+    --chart-ref: 215 14% 50%;
   }
   * { @apply border-border; }
   html { color-scheme: light; }

@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/input";
 import { useCareer } from "@/lib/career";
-import { fmtDate, fmtMoney } from "@/lib/format";
+import { METRIC_GROUP_LABEL, fmtDate, fmtInt, fmtMetric, fmtMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
-const TEXT_KEYS = ["q", "club", "nationality", "position", "min_age", "max_age", "min_ca", "min_pa", "max_value", "expires_before", "quality"] as const;
+const TEXT_KEYS = ["q", "club", "nationality", "position", "position_group", "min_age", "max_age", "min_ca", "min_pa", "max_value", "expires_before", "quality", "min_minutes", "min_ca_delta", "new_only"] as const;
 type TextKey = (typeof TEXT_KEYS)[number];
-type Draft = Record<TextKey, string> & { attrs: { key: string; min: string }[] };
+type MetricFilter = { key: string; min: string; kind: "m" | "p" };
+type Draft = Record<TextKey, string> & { attrs: { key: string; min: string }[]; metrics: MetricFilter[] };
 
 const CATEGORY_LABEL: Record<string, string> = {
   technical: "Técnicos", mental: "Mentais", physical: "Físicos", goalkeeping: "Guarda-redes",
@@ -27,7 +28,11 @@ function draftFrom(params: URLSearchParams): Draft {
     const [key, min] = s.split(":");
     return { key: key ?? "", min: min ?? "" };
   });
-  return { ...d, attrs };
+  const metrics: MetricFilter[] = [
+    ...params.getAll("min_metric").map((s) => ({ key: s.split(":")[0] ?? "", min: s.split(":")[1] ?? "", kind: "m" as const })),
+    ...params.getAll("min_percentile").map((s) => ({ key: s.split(":")[0] ?? "", min: s.split(":")[1] ?? "", kind: "p" as const })),
+  ];
+  return { ...d, attrs, metrics };
 }
 
 function addYear(iso: string | null): string {
@@ -36,10 +41,12 @@ function addYear(iso: string | null): string {
   return d.toISOString().slice(0, 10);
 }
 
-type SortKey = "name" | "age" | "club" | "ca" | "pa" | "market_value" | "wage_weekly" | "contract_expires";
+// Colunas base, crescimento ou "m:<métrica>" / "p:<métrica>" (percentil).
+type SortKey = string;
+const ASC_DEFAULT = new Set(["name", "club", "age", "contract_expires"]);
 
 export default function PlayersPage() {
-  const { careers, career, attributes, attrLabel } = useCareer();
+  const { careers, career, attributes, attrLabel, metrics: catalog, metricDef } = useCareer();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(params));
@@ -49,7 +56,7 @@ export default function PlayersPage() {
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false); // só relevante em ecrãs pequenos
 
-  const sort = (params.get("sort") as SortKey) || "ca";
+  const sort: SortKey = params.get("sort") || "ca";
   const order = params.get("order") === "asc" ? "asc" : "desc";
   const page = Math.max(0, Number(params.get("page") ?? 0));
 
@@ -87,6 +94,8 @@ export default function PlayersPage() {
     const next = new URLSearchParams();
     for (const k of TEXT_KEYS) if (d[k].trim()) next.set(k, d[k].trim());
     for (const a of d.attrs) if (a.key && a.min) next.append("min_attr", `${a.key}:${a.min}`);
+    for (const m of d.metrics)
+      if (m.key && m.min) next.append(m.kind === "p" ? "min_percentile" : "min_metric", `${m.key}:${m.min.replace(",", ".")}`);
     if (params.get("sort")) next.set("sort", sort);
     if (params.get("order")) next.set("order", order);
     setParams(next);
@@ -104,9 +113,14 @@ export default function PlayersPage() {
     if (immediate) apply(d);
   };
 
-  const quick = (preset: Partial<Record<TextKey, string>>) => {
-    const empty = draftFrom(new URLSearchParams());
-    apply({ ...empty, ...preset });
+  const quick = (preset: Partial<Record<TextKey, string>>, sortBy?: SortKey) => {
+    const next = new URLSearchParams();
+    for (const [k, v] of Object.entries(preset)) if (v) next.set(k, v);
+    if (sortBy) {
+      next.set("sort", sortBy);
+      next.set("order", ASC_DEFAULT.has(sortBy) ? "asc" : "desc");
+    }
+    setParams(next);
   };
 
   const setSort = (key: SortKey) => {
@@ -114,7 +128,7 @@ export default function PlayersPage() {
     if (sort === key) next.set("order", order === "desc" ? "asc" : "desc");
     else {
       next.set("sort", key);
-      next.set("order", key === "name" || key === "club" || key === "age" || key === "contract_expires" ? "asc" : "desc");
+      next.set("order", ASC_DEFAULT.has(key) ? "asc" : "desc");
     }
     next.delete("page");
     setParams(next);
@@ -129,7 +143,11 @@ export default function PlayersPage() {
   };
 
   const activeCount = useMemo(
-    () => TEXT_KEYS.filter((k) => params.get(k)).length + params.getAll("min_attr").length,
+    () =>
+      TEXT_KEYS.filter((k) => params.get(k)).length +
+      params.getAll("min_attr").length +
+      params.getAll("min_metric").length +
+      params.getAll("min_percentile").length,
     [params],
   );
 
@@ -142,6 +160,17 @@ export default function PlayersPage() {
       </EmptyState>
     );
   }
+
+  const metricOptions = Object.entries(METRIC_GROUP_LABEL).map(([g, label]) => (
+    <optgroup key={g} label={label}>
+      {catalog?.metrics
+        .filter((m) => m.group === g && m.unit !== "minutes")
+        .map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+    </optgroup>
+  ));
+  const metricKey = sort.startsWith("m:") || sort.startsWith("p:") ? sort.slice(2) : data?.items[0]?.metric_key ?? null;
+  const metricCol = metricKey ? metricDef(metricKey) : undefined;
+  const showGrowth = data?.items.some((p) => p.ca_delta !== null) ?? false;
 
   const grouped = attributes.reduce<Record<string, typeof attributes>>((acc, a) => {
     (acc[a.category] ??= []).push(a);
@@ -164,6 +193,14 @@ export default function PlayersPage() {
             <QuickChip onClick={() => quick({ expires_before: addYear(options?.game_date ?? null) })}>Contrato a terminar</QuickChip>
             <QuickChip onClick={() => quick({ min_ca: "150" })}>Elite (CA 150+)</QuickChip>
             <QuickChip onClick={() => quick({ quality: "error" })}>Leituras com erro</QuickChip>
+          </div>
+          <div className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Métricas</div>
+          <div className="flex flex-wrap gap-1.5">
+            <QuickChip onClick={() => quick({}, "ca_delta")}>Maiores subidas</QuickChip>
+            <QuickChip onClick={() => quick({ new_only: "true", max_age: "17" }, "pa")}>Novos regens</QuickChip>
+            <QuickChip onClick={() => quick({ min_minutes: "900" }, "m:average_rating")}>Melhor nota</QuickChip>
+            <QuickChip onClick={() => quick({ min_minutes: "900", position_group: "ST" }, "m:goals_90")}>Goleadores</QuickChip>
+            <QuickChip onClick={() => quick({ min_minutes: "900", max_age: "21" }, "m:average_rating")}>Jovens em forma</QuickChip>
           </div>
         </Card>
 
@@ -285,6 +322,82 @@ export default function PlayersPage() {
               </Button>
             </div>
 
+            <div className="space-y-1.5 border-t pt-3">
+              <Label>Desempenho</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="f-grp" className="font-normal">Grupo de posição</Label>
+                  <Select id="f-grp" value={draft.position_group} onChange={(e) => setField("position_group", e.target.value, true)}>
+                    <option value="">Qualquer</option>
+                    {Object.entries(catalog?.position_groups ?? {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </Select>
+                </div>
+                <NumField id="f-min" label="Minutos mín." value={draft.min_minutes} onChange={(v) => setField("min_minutes", v)} step={90} />
+              </div>
+              {draft.metrics.map((m, i) => {
+                const update = (patch: Partial<MetricFilter>) => {
+                  const metrics = [...draft.metrics];
+                  metrics[i] = { ...m, ...patch };
+                  setDraft({ ...draft, metrics });
+                };
+                return (
+                  <div key={i} className="space-y-1 rounded-md border p-1.5">
+                    <div className="flex gap-1.5">
+                      <Select aria-label="Métrica" value={m.key} onChange={(e) => update({ key: e.target.value })}>
+                        <option value="">Escolher métrica…</option>
+                        {metricOptions}
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        aria-label="Remover filtro de métrica"
+                        onClick={() => setDraft({ ...draft, metrics: draft.metrics.filter((_, j) => j !== i) })}
+                      >
+                        <X />
+                      </Button>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Select aria-label="Tipo" value={m.kind} onChange={(e) => update({ kind: e.target.value as "m" | "p" })}>
+                        <option value="p">Percentil ≥</option>
+                        <option value="m">Valor ≥</option>
+                      </Select>
+                      <Input
+                        aria-label="Mínimo"
+                        className="w-20 shrink-0"
+                        inputMode="decimal"
+                        value={m.min}
+                        onChange={(e) => update({ min: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setDraft({ ...draft, metrics: [...draft.metrics, { key: "", min: "75", kind: "p" }] })}
+              >
+                <Plus /> Adicionar métrica
+              </Button>
+              <p className="text-[11px] text-muted-foreground">
+                Percentil compara com a mesma posição (≥{catalog?.min_minutes_for_percentile ?? 450} min). Só com dados do save.
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-[hsl(var(--primary))]"
+                  checked={draft.new_only === "true"}
+                  onChange={(e) => setField("new_only", e.target.checked ? "true" : "", true)}
+                />
+                Só novos nesta importação
+              </label>
+              <NumField id="f-delta" label="CA ganho mín. (desde a anterior)" value={draft.min_ca_delta} onChange={(v) => setField("min_ca_delta", v)} />
+            </div>
+
             <Button type="submit" className="w-full"><Search /> Pesquisar</Button>
           </form>
         </Card>
@@ -294,8 +407,43 @@ export default function PlayersPage() {
       <section className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-lg font-semibold">Jogadores</h1>
-          <div className="text-sm text-muted-foreground">
-            {data ? `${data.total.toLocaleString("pt-PT")} resultados` : loading ? "A carregar…" : ""}
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <label className="flex items-center gap-1.5">
+              Ordenar por
+              <Select
+                aria-label="Ordenar por"
+                className="h-8 w-auto max-w-[220px]"
+                value={sort}
+                onChange={(e) => {
+                  const next = new URLSearchParams(params);
+                  next.set("sort", e.target.value);
+                  next.set("order", ASC_DEFAULT.has(e.target.value) ? "asc" : "desc");
+                  next.delete("page");
+                  setParams(next);
+                }}
+              >
+                <optgroup label="Jogador">
+                  <option value="ca">CA</option>
+                  <option value="pa">PA</option>
+                  <option value="pa_gap">Margem de progressão (PA − CA)</option>
+                  <option value="ca_delta">CA ganho desde a anterior</option>
+                  <option value="age">Idade</option>
+                  <option value="market_value">Valor</option>
+                  <option value="wage_weekly">Salário</option>
+                  <option value="contract_expires">Fim de contrato</option>
+                  <option value="minutes">Minutos jogados</option>
+                  <option value="name">Nome</option>
+                </optgroup>
+                {Object.entries(METRIC_GROUP_LABEL).map(([g, label]) => (
+                  <optgroup key={g} label={`Métricas — ${label}`}>
+                    {catalog?.metrics
+                      .filter((m) => m.group === g && m.unit !== "minutes")
+                      .map((m) => <option key={m.key} value={`m:${m.key}`}>{m.label}</option>)}
+                  </optgroup>
+                ))}
+              </Select>
+            </label>
+            <span>{data ? `${data.total.toLocaleString("pt-PT")} resultados` : loading ? "A carregar…" : ""}</span>
           </div>
         </div>
 
@@ -304,6 +452,19 @@ export default function PlayersPage() {
             {params.getAll("min_attr").map((s) => {
               const [k, v] = s.split(":");
               return <span key={s} className="rounded-full bg-accent px-2 py-0.5 text-accent-foreground">{attrLabel(k ?? "")} ≥ {v}</span>;
+            })}
+          </div>
+        )}
+
+        {(params.getAll("min_metric").length > 0 || params.getAll("min_percentile").length > 0) && (
+          <div className="flex flex-wrap gap-1.5 text-xs">
+            {params.getAll("min_metric").map((x) => {
+              const [k, v] = x.split(":");
+              return <span key={x} className="rounded-full bg-accent px-2 py-0.5 text-accent-foreground">{metricDef(k ?? "")?.label ?? k} ≥ {v}</span>;
+            })}
+            {params.getAll("min_percentile").map((x) => {
+              const [k, v] = x.split(":");
+              return <span key={x} className="rounded-full bg-accent px-2 py-0.5 text-accent-foreground">{metricDef(k ?? "")?.label ?? k}: percentil ≥ {v}</span>;
             })}
           </div>
         )}
@@ -322,7 +483,12 @@ export default function PlayersPage() {
                 <div className="truncate text-xs text-muted-foreground">
                   {p.age ?? "—"} anos · {p.positions.map((x) => POSITION_LABEL[x] ?? x).join(" ")} · {p.club ?? "Sem clube"}
                 </div>
-                <div className="text-xs text-muted-foreground">{fmtMoney(p.market_value)} · contrato {fmtDate(p.contract_expires)}</div>
+                <div className="text-xs text-muted-foreground">
+                  {metricCol && p.metric_value !== null
+                    ? `${metricCol.label}: ${fmtMetric(p.metric_value, metricCol.unit)} · ${fmtInt(p.minutes)} min`
+                    : `${fmtMoney(p.market_value)} · contrato ${fmtDate(p.contract_expires)}`}
+                  {p.ca_delta ? <Delta v={p.ca_delta} className="ml-1.5" /> : null}
+                </div>
               </div>
               <AbilityPill value={p.ca} />
               <AbilityPill value={p.pa} />
@@ -335,7 +501,7 @@ export default function PlayersPage() {
 
         <Card className={cn("hidden overflow-hidden sm:block", loading && "opacity-70")}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[900px] text-sm">
               <thead className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
                 <tr>
                   <Th k="name" sort={sort} order={order} onSort={setSort} className="pl-4">Nome</Th>
@@ -345,6 +511,13 @@ export default function PlayersPage() {
                   <Th k="club" sort={sort} order={order} onSort={setSort}>Clube</Th>
                   <Th k="ca" sort={sort} order={order} onSort={setSort} align="center">CA</Th>
                   <Th k="pa" sort={sort} order={order} onSort={setSort} align="center">PA</Th>
+                  {showGrowth && <Th k="ca_delta" sort={sort} order={order} onSort={setSort} align="right">Δ CA</Th>}
+                  {metricCol && (
+                    <>
+                      <Th k={`m:${metricCol.key}`} sort={sort} order={order} onSort={setSort} align="right">{metricCol.label}</Th>
+                      <Th k="minutes" sort={sort} order={order} onSort={setSort} align="right">Min.</Th>
+                    </>
+                  )}
                   <Th k="market_value" sort={sort} order={order} onSort={setSort} align="right">Valor</Th>
                   <Th k="wage_weekly" sort={sort} order={order} onSort={setSort} align="right">Salário/sem.</Th>
                   <Th k="contract_expires" sort={sort} order={order} onSort={setSort}>Contrato</Th>
@@ -375,6 +548,13 @@ export default function PlayersPage() {
                     <td className="max-w-[180px] truncate px-2">{p.club ?? <span className="text-muted-foreground">Sem clube</span>}</td>
                     <td className="px-2 text-center"><AbilityPill value={p.ca} /></td>
                     <td className="px-2 text-center"><AbilityPill value={p.pa} /></td>
+                    {showGrowth && <td className="px-2 text-right"><Delta v={p.ca_delta} /></td>}
+                    {metricCol && (
+                      <>
+                        <td className="px-2 text-right font-medium tabular-nums">{fmtMetric(p.metric_value, metricCol.unit)}</td>
+                        <td className="px-2 text-right tabular-nums text-muted-foreground">{fmtInt(p.minutes)}</td>
+                      </>
+                    )}
                     <td className="px-2 text-right tabular-nums">{fmtMoney(p.market_value)}</td>
                     <td className="px-2 text-right tabular-nums">{fmtMoney(p.wage_weekly)}</td>
                     <td className="whitespace-nowrap px-2 text-xs">{fmtDate(p.contract_expires)}</td>
@@ -451,7 +631,7 @@ function Th(props: {
   const active = props.sort === props.k;
   return (
     <th
-      className={cn("px-2 py-2 font-medium", props.className)}
+      className={cn("whitespace-nowrap px-2 py-2 font-medium", props.className)}
       aria-sort={active ? (props.order === "asc" ? "ascending" : "descending") : "none"}
     >
       <button
@@ -468,5 +648,14 @@ function Th(props: {
         {active && (props.order === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
       </button>
     </th>
+  );
+}
+
+function Delta({ v, className }: { v: number | null; className?: string }) {
+  if (v === null || v === 0) return <span className={cn("text-muted-foreground tabular-nums", className)}>{v === 0 ? "0" : "—"}</span>;
+  return (
+    <span className={cn("whitespace-nowrap font-semibold tabular-nums", v > 0 ? "text-attr-good" : "text-attr-low", className)}>
+      {v > 0 ? `▲ +${v}` : `▼ ${v}`}
+    </span>
   );
 }

@@ -59,7 +59,9 @@ _STAT_EXTRA = (
     "possession_won", "possession_lost", "distance_km", "non_penalty_expected_goals",
     "expected_goals_prevented", "goals_allowed", "headers_won", "clearances", "blocks",
     "saves_held", "saves_parried", "saves_tipped", "fouls_made", "fouls_against",
-    "mistakes_leading_to_goal", "rated_appearances",
+    "mistakes_leading_to_goal", "rated_appearances", "aerial_challenges_attempted",
+    "shots_on_target_faced", "clear_cut_chances_created", "crosses_attempted", "crosses_completed",
+    "high_intensity_sprints", "pressures_attempted", "pressures_completed", "open_play_key_passes",
 )
 
 

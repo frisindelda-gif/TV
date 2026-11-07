@@ -19,7 +19,7 @@ export type Career = {
 export type Run = {
   id: number;
   career_id: number;
-  connector: "live_memory" | "save_file";
+  connector: "live_memory" | "save_file" | "synthetic";
   tool: string;
   source_path: string | null;
   source_sha256: string | null;
@@ -57,6 +57,76 @@ export type PlayerRow = {
   wage_weekly: number | null;
   contract_expires: string | null;
   quality: Quality;
+  ca_delta: number | null;
+  is_new: boolean | null;
+  position_group: string | null;
+  minutes: number | null;
+  metric_key: string | null;
+  metric_value: number | null;
+};
+
+export type MetricDef = {
+  key: string;
+  label: string;
+  group: "attack" | "creation" | "defence" | "physical" | "goalkeeping" | "general";
+  unit: "per90" | "pct" | "total" | "rating" | "minutes";
+  higher_is_better: boolean;
+  gk_only: boolean;
+  outfield_only: boolean;
+};
+
+export type MetricsCatalog = {
+  metrics: MetricDef[];
+  position_groups: Record<string, string>;
+  radar: Record<string, string[]>;
+  min_minutes_for_percentile: number;
+};
+
+export type PlayerMetrics = {
+  position_group: string | null;
+  position_group_label: string | null;
+  minutes: number;
+  appearances: number;
+  values: Record<string, number | null>;
+  percentiles: Record<string, number>;
+  peers: number | null;
+  min_minutes: number;
+  enough_minutes: boolean;
+  radar: string[];
+  status: FieldStatus;
+};
+
+export type OverviewPlayer = {
+  player_id: number;
+  name: string;
+  age: number | null;
+  club: string | null;
+  ca: number | null;
+  pa: number | null;
+  ca_delta: number | null;
+  position_group: string | null;
+  positions: string[];
+  metric: number | null;
+  minutes: number | null;
+};
+
+export type Overview = {
+  run_id: number;
+  game_date: string | null;
+  season_label: string | null;
+  synthetic: boolean;
+  kpis: Record<"players" | "avg_ca" | "elite" | "wonderkids" | "new_players" | "new_regens" | "risers" | "fallers" | "with_stats", number>;
+  has_growth: boolean;
+  has_metrics: boolean;
+  ca_histogram: { from: number; to: number; players: number }[];
+  pa_histogram: { from: number; to: number; players: number }[];
+  position_groups: { group: string | null; label: string; players: number; avg_ca: number; max_ca: number | null }[];
+  clubs: { name: string; players: number; avg_ca: number; max_pa: number | null }[];
+  top_risers: OverviewPlayer[];
+  top_new_regens: OverviewPlayer[];
+  top_prospects: OverviewPlayer[];
+  top_rated: OverviewPlayer[];
+  top_scorers: OverviewPlayer[];
 };
 
 export type PlayerPage = { run_id: number; total: number; items: PlayerRow[] };
@@ -126,6 +196,8 @@ export type Profile = {
   attributes: Partial<Record<Category, Record<string, number>>>;
   season_stats: SeasonStat[];
   quality: Quality;
+  growth: { ca_delta: number | null; pa_delta: number | null; is_new: boolean | null; ca_since_first: number | null };
+  metrics: PlayerMetrics | null;
   issues: { severity: "error" | "warning"; field: string; code: string; message: string; value: unknown }[];
   field_status: Record<string, FieldStatus>;
   provenance: {

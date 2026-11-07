@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { getJson, type AttributeDef, type Career, type Run } from "@/api";
+import { getJson, type AttributeDef, type Career, type MetricsCatalog, type Run } from "@/api";
 
 type Ctx = {
   careers: Career[] | null;
@@ -7,6 +7,8 @@ type Ctx = {
   latestRun: Run | null;
   attributes: AttributeDef[];
   attrLabel: (key: string) => string;
+  metrics: MetricsCatalog | null;
+  metricDef: (key: string) => MetricsCatalog["metrics"][number] | undefined;
   setCareerId: (id: number) => void;
   reload: () => Promise<void>;
   error: string | null;
@@ -30,6 +32,7 @@ export function CareerProvider({ children }: { children: ReactNode }) {
   const [latestRun, setLatestRun] = useState<Run | null>(null);
   const [attributes, setAttributes] = useState<AttributeDef[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<MetricsCatalog | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -45,6 +48,7 @@ export function CareerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void reload();
     getJson<AttributeDef[]>("/api/attributes").then(setAttributes).catch(() => setAttributes([]));
+    getJson<MetricsCatalog>("/api/metrics").then(setMetrics).catch(() => setMetrics(null));
   }, [reload]);
 
   const career = useMemo(() => {
@@ -74,8 +78,12 @@ export function CareerProvider({ children }: { children: ReactNode }) {
     [attributes],
   );
 
+  const metricDef = useCallback((key: string) => metrics?.metrics.find((m) => m.key === key), [metrics]);
+
   return (
-    <CareerContext.Provider value={{ careers, career, latestRun, attributes, attrLabel, setCareerId, reload, error }}>
+    <CareerContext.Provider
+      value={{ careers, career, latestRun, attributes, attrLabel, metrics, metricDef, setCareerId, reload, error }}
+    >
       {children}
     </CareerContext.Provider>
   );

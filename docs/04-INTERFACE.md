@@ -5,6 +5,11 @@ de desenvolvimento pelo Vite em `http://127.0.0.1:5173/` (com proxy para a API).
 
 ## Ecrãs
 
+### Painel (`/painel`)
+Visão geral da carreira: números gerais, distribuições de CA e PA, maiores subidas, regens
+novos, maiores potenciais, melhores em campo, resumo por posição e por clube. Ver
+[`05-METRICAS.md`](05-METRICAS.md).
+
 ### Jogadores (`/jogadores`)
 - Tabela ordenável: nome, idade, posições (naturais a negrito), nacionalidade, clube, CA, PA,
   valor, salário semanal, fim de contrato, qualidade da leitura.
@@ -47,4 +52,4 @@ de desenvolvimento pelo Vite em `http://127.0.0.1:5173/` (com proxy para a API).
 
 ## Ainda não incluído
 Shortlists, comparação de jogadores, funções (roles), staff, exportação CSV, análise de
-plantel. Ficam para a próxima etapa, de preferência depois do teste com o FM27 real.
+plantel. (As métricas de desempenho e o painel já estão incluídos.) Ficam para a próxima etapa, de preferência depois do teste com o FM27 real.

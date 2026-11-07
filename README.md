@@ -7,6 +7,7 @@ carreira de demonstração (dados sintéticos); a leitura do FM27 real ainda nã
 (ver [`docs/03-RESULTADOS-POC.md`](docs/03-RESULTADOS-POC.md), secção 7).
 
 - Interface: [`docs/04-INTERFACE.md`](docs/04-INTERFACE.md)
+- Métricas: [`docs/05-METRICAS.md`](docs/05-METRICAS.md)
 
 - Investigação dos projetos FMSuperScout e fmsave: [`docs/01-INVESTIGACAO.md`](docs/01-INVESTIGACAO.md)
 - Arquitetura: [`docs/02-ARQUITETURA.md`](docs/02-ARQUITETURA.md)

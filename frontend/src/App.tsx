@@ -1,4 +1,4 @@
-import { Database, Moon, Sun, Users } from "lucide-react";
+import { Database, LayoutDashboard, Moon, Sun, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBox, SyntheticBadge } from "@/components/common";
@@ -9,6 +9,7 @@ import { CONNECTOR_LABEL, fmtDate } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import ImportPage from "@/pages/ImportPage";
+import OverviewPage from "@/pages/OverviewPage";
 import PlayerPage from "@/pages/PlayerPage";
 import PlayersPage from "@/pages/PlayersPage";
 
@@ -39,9 +40,10 @@ export default function App() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           <div className="flex items-center gap-2 font-semibold">
             <span className="grid size-7 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">27</span>
-            <span className="hidden sm:inline">Scouting Intelligence</span>
+            <span className="hidden md:inline">Scouting Intelligence</span>
           </div>
           <nav className="flex items-center gap-1">
+            <NavItem to="/painel" icon={<LayoutDashboard className="size-4" />}>Painel</NavItem>
             <NavItem to="/jogadores" icon={<Users className="size-4" />}>Jogadores</NavItem>
             <NavItem to="/dados" icon={<Database className="size-4" />}>Dados</NavItem>
           </nav>
@@ -84,7 +86,8 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 py-5">
         {error && <div className="mb-4"><ErrorBox message={`Não foi possível contactar o backend: ${error}`} /></div>}
         <Routes>
-          <Route path="/" element={<Navigate to="/jogadores" replace />} />
+          <Route path="/" element={<Navigate to="/painel" replace />} />
+          <Route path="/painel" element={<OverviewPage />} />
           <Route path="/jogadores" element={<PlayersPage />} />
           <Route path="/jogador/:id" element={<PlayerPage />} />
           <Route path="/dados" element={<ImportPage />} />

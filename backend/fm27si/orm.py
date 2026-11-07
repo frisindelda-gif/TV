@@ -150,6 +150,12 @@ class PlayerSnapshot(Base):
     field_status: Mapped[dict] = mapped_column(JSON, default=dict)
     extra: Mapped[dict] = mapped_column(JSON, default=dict)
     quality: Mapped[str] = mapped_column(String(10), default="ok")  # ok | warning | error
+    # Crescimento (derivado): comparação com o snapshot anterior do mesmo jogador na carreira.
+    prev_snapshot_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ca_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pa_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_new: Mapped[bool | None] = mapped_column(Boolean, nullable=True)  # 1.ª vez visto nesta carreira
+    position_group: Mapped[str | None] = mapped_column(String(4), nullable=True)
 
     player: Mapped[Player] = relationship(back_populates="snapshots")
     issues: Mapped[list[ValidationIssue]] = relationship(cascade="all, delete-orphan")
@@ -198,6 +204,18 @@ class SeasonStatLine(Base):
     red_cards: Mapped[int | None] = mapped_column(Integer)
     clean_sheets: Mapped[int | None] = mapped_column(Integer)
     extra: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class SnapshotMetrics(Base):
+    """Métricas de desempenho DERIVADAS das estatísticas (por 90', %, percentis por posição)."""
+
+    __tablename__ = "snapshot_metrics"
+    snapshot_id: Mapped[int] = mapped_column(ForeignKey("player_snapshots.id", ondelete="CASCADE"), primary_key=True)
+    position_group: Mapped[str | None] = mapped_column(String(4))
+    minutes: Mapped[float] = mapped_column(Float, default=0)
+    appearances: Mapped[float] = mapped_column(Float, default=0)
+    values: Mapped[dict] = mapped_column(JSON, default=dict)
+    percentiles: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class ValidationIssue(Base):

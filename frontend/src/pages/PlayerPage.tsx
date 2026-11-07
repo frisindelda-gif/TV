@@ -12,6 +12,7 @@ import {
   StatusBadge,
   SyntheticBadge,
 } from "@/components/common";
+import { PerformanceCard } from "@/components/Performance";
 import { POSITION_LABEL, PositionPitch } from "@/components/PositionPitch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -110,6 +111,7 @@ export default function PlayerPage() {
                 <h1 className="text-2xl font-semibold tracking-tight">{p.name}</h1>
                 <QualityIcon quality={p.quality} />
                 {p.provenance.synthetic && <SyntheticBadge />}
+                {p.growth?.is_new && <Badge variant="secondary">novo nesta importação</Badge>}
               </div>
               <div className="mt-1 text-sm text-muted-foreground">
                 {[
@@ -140,7 +142,7 @@ export default function PlayerPage() {
               </div>
             </div>
             <div className="flex gap-3">
-              <AbilityBox label="CA" value={p.ability.ca} status={st.ca} />
+              <AbilityBox label="CA" value={p.ability.ca} status={st.ca} delta={p.growth?.ca_delta ?? null} />
               <AbilityBox
                 label="PA"
                 value={p.ability.pa}
@@ -235,10 +237,12 @@ export default function PlayerPage() {
         </Card>
       </div>
 
+      <PerformanceCard metrics={p.metrics} connector={p.provenance.connector} />
+
       <EvolutionCard p={p} />
 
       <Card>
-        <CardHeader><CardTitle>Estatísticas da época</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Estatísticas da época (totais)</CardTitle></CardHeader>
         <CardContent>
           {p.season_stats.length ? (
             <div className="overflow-x-auto">
@@ -292,11 +296,19 @@ export default function PlayerPage() {
   );
 }
 
-function AbilityBox({ label, value, status, note }: { label: string; value: number | null; status?: Profile["field_status"][string]; note?: string }) {
+function AbilityBox({ label, value, status, note, delta }: { label: string; value: number | null; status?: Profile["field_status"][string]; note?: string; delta?: number | null }) {
   return (
     <div className="flex min-w-[88px] flex-col items-center rounded-lg border bg-muted/40 px-3 py-2">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <AbilityPill value={value} className="mt-1 text-2xl" />
+      {delta !== undefined && delta !== null && delta !== 0 && (
+        <div
+          className={delta > 0 ? "text-xs font-semibold text-attr-good" : "text-xs font-semibold text-attr-low"}
+          title="Variação desde a importação anterior"
+        >
+          {delta > 0 ? `▲ +${delta}` : `▼ ${delta}`}
+        </div>
+      )}
       <div className="mt-1">{note ? <span className="text-[11px] text-muted-foreground">{note}</span> : <StatusBadge status={status} />}</div>
     </div>
   );

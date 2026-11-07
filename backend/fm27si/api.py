@@ -10,11 +10,12 @@ from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import Integer, func, select
 from sqlalchemy.orm import Session
 
 from fm27si import __version__
 from fm27si.catalog import ATTRIBUTES, POSITION_KEYS
+from fm27si.metrics import METRIC_BY_KEY, METRICS, MIN_MINUTES_FOR_PERCENTILE, POSITION_GROUPS, RADAR
 from fm27si.config import fmsuperscout_dump_path
 from fm27si.connectors.base import ConnectorError
 from fm27si.db import Database
@@ -27,6 +28,7 @@ from fm27si.orm import (
     PlayerSnapshot,
     SeasonStatLine,
     SnapshotAttributes,
+    SnapshotMetrics,
     ValidationIssue,
 )
 
@@ -86,6 +88,12 @@ class PlayerRow(BaseModel):
     wage_weekly: int | None
     contract_expires: date | None
     quality: str
+    ca_delta: int | None = None
+    is_new: bool | None = None
+    position_group: str | None = None
+    minutes: float | None = None
+    metric_key: str | None = None
+    metric_value: float | None = None
 
 
 class PlayerPage(BaseModel):
@@ -253,17 +261,25 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
     def import_demo(players: int = Query(400, ge=10, le=20000), seasons: int = Query(3, ge=1, le=5),
                     s: Session = Depends(get_session)):
         """Cria uma carreira de DEMONSTRAÇÃO com dados sintéticos (marcados como tal)."""
-        import tempfile  # noqa: PLC0415
+        from fm27si.testdata import demo_bundles  # noqa: PLC0415
 
-        from fm27si.connectors.live_fmsuperscout import FMSuperScoutLiveConnector  # noqa: PLC0415
-        from fm27si.testdata import write_test_career  # noqa: PLC0415
+        return [
+            _import_out(import_bundle(s, b, career_key="demo|dados-sinteticos"))
+            for b in demo_bundles(players=players, seasons=seasons)
+        ]
 
-        out = []
-        with tempfile.TemporaryDirectory(prefix="fm27si-demo-") as tmp:
-            for p in write_test_career(Path(tmp), players=players, seasons=seasons):
-                bundle = FMSuperScoutLiveConnector().load(p)
-                out.append(_import_out(import_bundle(s, bundle, career_key="demo|dados-sinteticos")))
-        return out
+    @app.get("/api/metrics")
+    def metrics_catalog():
+        return {
+            "metrics": [
+                {"key": m.key, "label": m.label, "group": m.group, "unit": m.unit,
+                 "higher_is_better": m.higher_is_better, "gk_only": m.gk_only, "outfield_only": m.outfield_only}
+                for m in METRICS
+            ],
+            "position_groups": POSITION_GROUPS,
+            "radar": RADAR,
+            "min_minutes_for_percentile": MIN_MINUTES_FOR_PERCENTILE,
+        }
 
     @app.get("/api/players", response_model=PlayerPage)
     def players(
@@ -273,6 +289,7 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
         q: str | None = Query(None, description="Pesquisa por nome"),
         club: str | None = None,
         position: str | None = None,
+        position_group: str | None = Query(None, description="GK, CB, FB, DM, CM, WM, AM, ST"),
         min_ca: int | None = None,
         min_pa: int | None = None,
         min_age: int | None = None,
@@ -281,8 +298,13 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
         nationality: str | None = None,
         expires_before: date | None = Query(None, description="Contrato termina até esta data"),
         quality: Literal["ok", "warning", "error"] | None = None,
+        min_ca_delta: int | None = Query(None, description="CA ganho desde a importação anterior"),
+        new_only: bool = Query(False, description="Só jogadores que apareceram nesta importação"),
+        min_minutes: int | None = None,
         min_attr: list[str] = Query(default=[], description="key:valor, p.ex. pace:15"),
-        sort: Literal["ca", "pa", "age", "name", "market_value", "wage_weekly", "contract_expires", "club"] = "ca",
+        min_metric: list[str] = Query(default=[], description="key:valor, p.ex. xg_90:0.3"),
+        min_percentile: list[str] = Query(default=[], description="key:percentil, p.ex. xg_90:80"),
+        sort: str = Query("ca", description="ca, pa, age, name, market_value, wage_weekly, contract_expires, club, ca_delta, pa_gap, minutes ou m:<métrica> / p:<métrica> (percentil)"),
         order: Literal["asc", "desc"] = "desc",
         limit: int = Query(50, ge=1, le=500),
         offset: int = Query(0, ge=0),
@@ -290,8 +312,13 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
         run = s.get(ImportRun, run_id) if run_id else _latest_run(s, career_id)
         if run is None:
             raise HTTPException(404, "Importação não encontrada")
-        S = PlayerSnapshot
-        stmt = select(S, Player.unique_id, Player.nationalities).join(Player, Player.id == S.player_id).where(S.run_id == run.id)
+        S, M = PlayerSnapshot, SnapshotMetrics
+        stmt = (
+            select(S, Player.unique_id, Player.nationalities, M.minutes, M.values)
+            .join(Player, Player.id == S.player_id)
+            .outerjoin(M, M.snapshot_id == S.id)
+            .where(S.run_id == run.id)
+        )
         if q:
             stmt = stmt.where(S.name.ilike(f"%{q}%"))
         if club:
@@ -312,6 +339,22 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
             stmt = stmt.where(S.contract_expires <= expires_before)
         if quality:
             stmt = stmt.where(S.quality == quality)
+        if min_ca_delta is not None:
+            stmt = stmt.where(S.ca_delta >= min_ca_delta)
+        if new_only:
+            stmt = stmt.where(S.is_new.is_(True))
+        if position_group:
+            if position_group not in POSITION_GROUPS:
+                raise HTTPException(422, f"Grupo de posição inválido: {position_group}")
+            stmt = stmt.where(S.position_group == position_group)
+        if min_minutes is not None:
+            stmt = stmt.where(M.minutes >= min_minutes)
+        for spec in min_metric:
+            key, val = _metric_spec(spec)
+            stmt = stmt.where(func.json_extract(M.values, f"$.{key}") >= val)
+        for spec in min_percentile:
+            key, val = _metric_spec(spec)
+            stmt = stmt.where(func.json_extract(M.percentiles, f"$.{key}") >= val)
         if min_attr:
             A = SnapshotAttributes
             stmt = stmt.join(A, A.snapshot_id == S.id)
@@ -329,10 +372,24 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
                 > 0
             )
         total = s.scalar(select(func.count()).select_from(stmt.subquery()))
-        col = {
-            "ca": S.ca, "pa": S.pa, "age": S.age, "name": S.name, "market_value": S.market_value,
-            "wage_weekly": S.wage_weekly, "contract_expires": S.contract_expires, "club": S.club_name,
-        }[sort]
+
+        metric_key: str | None = None
+        if sort.startswith(("m:", "p:")):
+            metric_key = sort[2:]
+            if metric_key not in METRIC_BY_KEY:
+                raise HTTPException(422, f"Métrica desconhecida: {metric_key}")
+            col = func.json_extract(M.values if sort[0] == "m" else M.percentiles, f"$.{metric_key}")
+        else:
+            cols = {
+                "ca": S.ca, "pa": S.pa, "age": S.age, "name": S.name, "market_value": S.market_value,
+                "wage_weekly": S.wage_weekly, "contract_expires": S.contract_expires, "club": S.club_name,
+                "ca_delta": S.ca_delta, "pa_gap": S.pa - S.ca, "minutes": M.minutes,
+            }
+            if sort not in cols:
+                raise HTTPException(422, f"Ordenação inválida: {sort}")
+            col = cols[sort]
+        if metric_key is None and (min_metric or min_percentile):
+            metric_key = _metric_spec((min_metric or min_percentile)[0])[0]
         stmt = stmt.order_by(col.desc().nulls_last() if order == "desc" else col.asc().nulls_last(), S.id)
         items = [
             PlayerRow(
@@ -350,10 +407,94 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
                 wage_weekly=snap.wage_weekly,
                 contract_expires=snap.contract_expires,
                 quality=snap.quality,
+                ca_delta=snap.ca_delta,
+                is_new=snap.is_new,
+                position_group=snap.position_group,
+                minutes=minutes,
+                metric_key=metric_key,
+                metric_value=(values or {}).get(metric_key) if metric_key else None,
             )
-            for snap, uid, nats in s.execute(stmt.limit(limit).offset(offset))
+            for snap, uid, nats, minutes, values in s.execute(stmt.limit(limit).offset(offset))
         ]
         return PlayerPage(run_id=run.id, total=total or 0, items=items)
+
+    @app.get("/api/overview")
+    def overview(career_id: int | None = None, run_id: int | None = None, s: Session = Depends(get_session)):
+        """Painel da carreira: números gerais, distribuições, maiores subidas, novos regens, destaques."""
+        run = s.get(ImportRun, run_id) if run_id else _latest_run(s, career_id)
+        if run is None:
+            raise HTTPException(404, "Importação não encontrada")
+        S, M = PlayerSnapshot, SnapshotMetrics
+        base = select(S).where(S.run_id == run.id)
+
+        def count(*conds) -> int:
+            return s.scalar(select(func.count()).select_from(S).where(S.run_id == run.id, *conds)) or 0
+
+        def top(order_col, *conds, n: int = 8, with_metric: str | None = None):
+            q = select(S, M.values, M.minutes).outerjoin(M, M.snapshot_id == S.id).where(S.run_id == run.id, *conds)
+            rows = s.execute(q.order_by(order_col.desc().nulls_last(), S.id).limit(n)).all()
+            return [
+                {
+                    "player_id": x.player_id, "name": x.name, "age": x.age, "club": x.club_name, "ca": x.ca, "pa": x.pa,
+                    "ca_delta": x.ca_delta, "position_group": x.position_group,
+                    "positions": list(x.natural_positions or []),
+                    "metric": (vals or {}).get(with_metric) if with_metric else None, "minutes": mins,
+                }
+                for x, vals, mins in rows
+            ]
+
+        def histogram(col, width: int = 10):
+            bucket = (func.cast(col / width, Integer) * width).label("b")
+            rows = s.execute(
+                select(bucket, func.count()).where(S.run_id == run.id, col.is_not(None)).group_by(bucket).order_by(bucket)
+            ).all()
+            return [{"from": int(b), "to": int(b) + width - 1, "players": n} for b, n in rows]
+
+        groups = s.execute(
+            select(S.position_group, func.count(), func.avg(S.ca), func.max(S.ca))
+            .where(S.run_id == run.id).group_by(S.position_group)
+        ).all()
+        clubs = s.execute(
+            select(S.club_name, func.count(), func.avg(S.ca), func.max(S.pa))
+            .where(S.run_id == run.id, S.club_name.is_not(None))
+            .group_by(S.club_name).order_by(func.avg(S.ca).desc()).limit(12)
+        ).all()
+        has_growth = count(S.ca_delta.is_not(None)) > 0
+        has_metrics = (s.scalar(select(func.count()).select_from(M).join(S, S.id == M.snapshot_id).where(S.run_id == run.id)) or 0) > 0
+        rating = func.json_extract(M.values, "$.average_rating")
+        eligible = M.minutes >= MIN_MINUTES_FOR_PERCENTILE
+        return {
+            "run_id": run.id,
+            "game_date": run.game_date,
+            "season_label": run.season_label,
+            "synthetic": run.synthetic,
+            "kpis": {
+                "players": count(),
+                "avg_ca": round(s.scalar(select(func.avg(S.ca)).where(S.run_id == run.id)) or 0, 1),
+                "elite": count(S.ca >= 150),
+                "wonderkids": count(S.age <= 19, S.pa >= 150),
+                "new_players": count(S.is_new.is_(True)),
+                "new_regens": count(S.is_new.is_(True), S.age <= 17),
+                "risers": count(S.ca_delta >= 5),
+                "fallers": count(S.ca_delta <= -5),
+                "with_stats": s.scalar(select(func.count()).select_from(M).join(S, S.id == M.snapshot_id).where(S.run_id == run.id)) or 0,
+            },
+            "has_growth": has_growth,
+            "has_metrics": has_metrics,
+            "ca_histogram": histogram(S.ca),
+            "pa_histogram": histogram(S.pa),
+            "position_groups": [
+                {"group": g, "label": POSITION_GROUPS.get(g or "", "Sem posição"), "players": n,
+                 "avg_ca": round(a or 0, 1), "max_ca": mx}
+                for g, n, a, mx in groups
+            ],
+            "clubs": [{"name": n, "players": c, "avg_ca": round(a or 0, 1), "max_pa": mp} for n, c, a, mp in clubs],
+            "top_risers": top(S.ca_delta, S.ca_delta > 0) if has_growth else [],
+            "top_new_regens": top(S.pa, S.is_new.is_(True), S.age <= 18),
+            "top_prospects": top(S.pa, S.age <= 21),
+            "top_rated": top(rating, eligible, with_metric="average_rating") if has_metrics else [],
+            "top_scorers": top(func.json_extract(M.values, "$.goals_90"), eligible, with_metric="goals_90") if has_metrics else [],
+        }
 
     @app.get("/api/players/{player_id}")
     def player_profile(player_id: int, run_id: int | None = None, s: Session = Depends(get_session)):
@@ -410,6 +551,13 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
                 for st in stats
             ],
             "quality": snap.quality,
+            "growth": {
+                "ca_delta": snap.ca_delta,
+                "pa_delta": snap.pa_delta,
+                "is_new": snap.is_new,
+                "ca_since_first": (snap.ca - snaps[0].ca) if snap.ca is not None and snaps[0].ca is not None and len(snaps) > 1 else None,
+            },
+            "metrics": _metrics_block(s, snap),
             "issues": [{"severity": i.severity, "field": i.field, "code": i.code, "message": i.message, "value": i.value} for i in issues],
             "field_status": snap.field_status,
             "extra": snap.extra,
@@ -445,6 +593,43 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
 
     _mount_frontend(app)
     return app
+
+
+def _metrics_block(s: Session, snap: PlayerSnapshot) -> dict | None:
+    m = s.get(SnapshotMetrics, snap.id)
+    if m is None:
+        return None
+    peers = None
+    if m.position_group:
+        peers = s.scalar(
+            select(func.count()).select_from(SnapshotMetrics).join(PlayerSnapshot, PlayerSnapshot.id == SnapshotMetrics.snapshot_id)
+            .where(PlayerSnapshot.run_id == snap.run_id, SnapshotMetrics.position_group == m.position_group,
+                   SnapshotMetrics.minutes >= MIN_MINUTES_FOR_PERCENTILE)
+        )
+    return {
+        "position_group": m.position_group,
+        "position_group_label": POSITION_GROUPS.get(m.position_group or ""),
+        "minutes": m.minutes,
+        "appearances": m.appearances,
+        "values": m.values,
+        "percentiles": m.percentiles,
+        "peers": peers,
+        "min_minutes": MIN_MINUTES_FOR_PERCENTILE,
+        "enough_minutes": m.minutes >= MIN_MINUTES_FOR_PERCENTILE,
+        "radar": list(RADAR.get(m.position_group or "", ())),
+        "status": "derived",
+    }
+
+
+def _metric_spec(spec: str) -> tuple[str, float]:
+    key, _, val = spec.partition(":")
+    try:
+        num = float(val)
+    except ValueError:
+        num = None
+    if key not in METRIC_BY_KEY or num is None:
+        raise HTTPException(422, f"Filtro de métrica inválido: {spec}")
+    return key, num
 
 
 def _frontend_dist() -> Path | None:

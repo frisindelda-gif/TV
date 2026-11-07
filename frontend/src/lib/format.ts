@@ -48,6 +48,7 @@ export const STATUS_HELP: Record<FieldStatus, string> = {
 export const CONNECTOR_LABEL: Record<string, string> = {
   live_memory: "Memória (Live)",
   save_file: "Save (.fm)",
+  synthetic: "Demonstração",
 };
 
 export const FOOT_LABEL: Record<string, string> = { left: "Esquerdo", right: "Direito", both: "Ambos" };
@@ -106,3 +107,34 @@ export const FIELD_LABEL: Record<string, string> = {
 };
 
 export const fieldLabel = (k: string) => FIELD_LABEL[k] ?? k;
+
+/** Valor de uma métrica conforme a unidade. */
+export function fmtMetric(v: number | null | undefined, unit: string | undefined): string {
+  if (v === null || v === undefined) return "—";
+  switch (unit) {
+    case "pct":
+      return `${v.toFixed(1).replace(".", ",")}%`;
+    case "per90":
+      return v.toFixed(2).replace(".", ",");
+    case "rating":
+      return v.toFixed(2).replace(".", ",");
+    case "minutes":
+      return fmtInt(Math.round(v));
+    default:
+      return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(".", ",");
+  }
+}
+
+export const METRIC_GROUP_LABEL: Record<string, string> = {
+  attack: "Ataque",
+  creation: "Criação",
+  defence: "Defesa",
+  physical: "Físico e disciplina",
+  goalkeeping: "Guarda-redes",
+  general: "Geral",
+};
+
+export function fmtDelta(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return v > 0 ? `+${v}` : String(v);
+}

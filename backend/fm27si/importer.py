@@ -18,7 +18,7 @@ from datetime import datetime
 
 import threading
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import func, insert, or_, select, update
 from sqlalchemy.orm import Session
 
 from fm27si.catalog import ATTRIBUTES
@@ -31,8 +31,12 @@ from fm27si.orm import (
     PlayerSnapshot,
     SeasonStatLine,
     SnapshotAttributes,
+    SnapshotMetrics,
     ValidationIssue,
 )
+from fm27si.metrics import compute as compute_metrics
+from fm27si.metrics import percentiles as compute_percentiles
+from fm27si.metrics import position_group
 from fm27si.schemas import ImportBundle, NormalizedPlayer
 from fm27si.validation import quality_of, validate_player
 
@@ -208,10 +212,17 @@ def _import_bundle(session: Session, bundle: ImportBundle, *, career_key: str | 
     for chunk in _chunks(existing_ids, 900):
         session.execute(update(Player).where(Player.id.in_(chunk)).values(last_seen_run_id=run.id))
 
+    prev = _previous_snapshots(session, run, existing_ids)
+    first_run = prev_run_id is None
+
     # ------------------------------------------------------------- snapshots
     snap_rows = []
     all_issues = []
-    for (p, _ident, _), player_id in zip(plan, player_ids, strict=True):
+    groups: list[str | None] = []
+    for (p, _ident, existing_pid), player_id in zip(plan, player_ids, strict=True):
+        group = position_group(p.natural_positions, p.accomplished_positions)
+        groups.append(group)
+        before = prev.get(player_id)
         issues = validate_player(p)
         all_issues.append(issues)
         club_id = None
@@ -254,6 +265,12 @@ def _import_bundle(session: Session, bundle: ImportBundle, *, career_key: str | 
                 "field_status": p.field_status,
                 "extra": _jsonable(p.extra),
                 "quality": quality_of(issues),
+                "position_group": group,
+                "prev_snapshot_id": before[0] if before else None,
+                "ca_delta": p.ca - before[1] if before and p.ca is not None and before[1] is not None else None,
+                "pa_delta": p.pa - before[2] if before and p.pa is not None and before[2] is not None else None,
+                # Na primeira importação da carreira todos seriam "novos": fica indefinido.
+                "is_new": None if first_run else existing_pid is None,
             }
         )
     snap_ids = _assign_ids(session, PlayerSnapshot, snap_rows)
@@ -285,6 +302,30 @@ def _import_bundle(session: Session, bundle: ImportBundle, *, career_key: str | 
 
     _bulk(session, SeasonStatLine, stat_rows())
 
+    # --------------------------------------------- métricas (derivadas)
+    metric_rows: list[tuple[int, str | None, float, dict]] = []
+    for (p, _, _), sid, group in zip(plan, snap_ids, groups, strict=True):
+        if p.season_stats:
+            vals, minutes = compute_metrics(p.season_stats, group)
+            if vals:
+                metric_rows.append((sid, group, minutes, vals))
+    pcts = compute_percentiles(metric_rows)
+    _bulk(
+        session,
+        SnapshotMetrics,
+        (
+            {
+                "snapshot_id": sid,
+                "position_group": group,
+                "minutes": minutes,
+                "appearances": vals.get("appearances") or 0,
+                "values": vals,
+                "percentiles": pcts.get(sid, {}),
+            }
+            for sid, group, minutes, vals in metric_rows
+        ),
+    )
+
     run.player_count = len(plan)
     run.error_count = sum(1 for iss in all_issues if any(i.severity == "error" for i in iss))
     run.warning_count = sum(1 for iss in all_issues if quality_of(iss) == "warning")
@@ -297,6 +338,23 @@ def _import_bundle(session: Session, bundle: ImportBundle, *, career_key: str | 
         skipped=skipped,
         warnings=warnings,
     )
+
+
+def _previous_snapshots(session: Session, run: ImportRun, player_ids: list[int]) -> dict[int, tuple[int, int | None, int | None]]:
+    """Snapshot anterior de cada jogador: o de data de jogo mais recente que não seja posterior a esta."""
+    S, R = PlayerSnapshot, ImportRun
+    out: dict[int, tuple[int, int | None, int | None]] = {}
+    for chunk in _chunks(player_ids, 900):
+        rn = func.row_number().over(partition_by=S.player_id, order_by=(R.game_date.desc(), S.id.desc())).label("rn")
+        inner = select(S.id, S.player_id, S.ca, S.pa, rn).join(R, R.id == S.run_id).where(
+            S.player_id.in_(chunk), S.run_id != run.id
+        )
+        if run.game_date is not None:
+            inner = inner.where(or_(R.game_date.is_(None), R.game_date <= run.game_date))
+        sq = inner.subquery()
+        for sid, pid, ca, pa in session.execute(select(sq.c.id, sq.c.player_id, sq.c.ca, sq.c.pa).where(sq.c.rn == 1)):
+            out[pid] = (sid, ca, pa)
+    return out
 
 
 def _upsert_clubs(session: Session, career_id: int, run_id: int, bundle: ImportBundle):
