@@ -227,3 +227,67 @@ class ValidationIssue(Base):
     code: Mapped[str] = mapped_column(String(40))
     message: Mapped[str] = mapped_column(Text)
     value: Mapped[object | None] = mapped_column(JSON)
+
+
+# ---------------------------------------------------------------------------
+# Motor de avaliação (Position Lab)
+# ---------------------------------------------------------------------------
+
+
+class EvaluationModel(Base):
+    """Um conjunto de pesos (métricas, posições, funções). O original é só de leitura."""
+
+    __tablename__ = "evaluation_models"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    base_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    spec: Mapped[dict] = mapped_column(JSON)
+    spec_hash: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class PlayerEvaluation(Base):
+    """Resultado do motor para um snapshot com um modelo (identificado pelo spec_hash)."""
+
+    __tablename__ = "player_evaluations"
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", "model_id"),
+        Index("ix_eval_run_model", "run_id", "model_id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    snapshot_id: Mapped[int] = mapped_column(ForeignKey("player_snapshots.id", ondelete="CASCADE"))
+    run_id: Mapped[int] = mapped_column(ForeignKey("import_runs.id", ondelete="CASCADE"))
+    model_id: Mapped[int] = mapped_column(ForeignKey("evaluation_models.id", ondelete="CASCADE"))
+    spec_hash: Mapped[str] = mapped_column(String(32))
+    position_scores: Mapped[dict] = mapped_column(JSON)  # {pos: score | null}
+    role_scores: Mapped[dict] = mapped_column(JSON)  # {role: score | null}
+    group_scores: Mapped[dict] = mapped_column(JSON)  # {grupo: melhor score numa posição em que é competente}
+    eligible_positions: Mapped[list] = mapped_column(JSON)
+    best_position: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    best_position_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    best_role: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    best_role_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min_coverage: Mapped[float] = mapped_column(Float)  # menor cobertura entre as posições
+    confidence: Mapped[str] = mapped_column(String(10))  # da melhor posição
+    computed_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class EvaluationBaseline(Base):
+    """Médias por posição (jogadores competentes nessa posição) numa importação."""
+
+    __tablename__ = "evaluation_baselines"
+    __table_args__ = (UniqueConstraint("run_id", "model_id", "position"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("import_runs.id", ondelete="CASCADE"))
+    model_id: Mapped[int] = mapped_column(ForeignKey("evaluation_models.id", ondelete="CASCADE"))
+    spec_hash: Mapped[str] = mapped_column(String(32))
+    position: Mapped[str] = mapped_column(String(4))
+    players: Mapped[int] = mapped_column(Integer)
+    score_mean: Mapped[float | None] = mapped_column(Float, nullable=True)
+    metric_means: Mapped[dict] = mapped_column(JSON)
+    attribute_means: Mapped[dict] = mapped_column(JSON)

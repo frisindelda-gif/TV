@@ -54,6 +54,34 @@ class _P:
     extra: dict = field(default_factory=dict)
 
 
+_WB = {"WBL": "DL", "WBR": "DR"}
+
+
+def _position_key_attributes(position: str) -> set[str]:
+    """Os ~12 atributos (nomes FMSuperScout) mais importantes da posição no modelo original."""
+    return _key_attrs_cached(_WB.get(position, position))
+
+
+def _key_attrs_cached(position: str, _memo: dict = {}) -> set[str]:  # noqa: B006
+    if position in _memo:
+        return _memo[position]
+    from fm27si.evaluation.defaults import original_spec  # noqa: PLC0415
+
+    spec = original_spec()
+    pos = spec.position(position)
+    total = sum(w.weight for w in pos.metrics)
+    imp: dict[str, float] = {}
+    for w in pos.metrics:
+        m = spec.metric(w.metric)
+        mt = sum(a.weight for a in m.attributes)
+        for a in m.attributes:
+            if not a.invert:
+                imp[a.attribute] = imp.get(a.attribute, 0) + w.weight / total * a.weight / mt
+    top = sorted(imp, key=imp.get, reverse=True)[:12]
+    _memo[position] = {ATTRIBUTES[k].fmss_key for k in top}
+    return _memo[position]
+
+
 class SyntheticCareer:
     def __init__(self, n_players: int = 300, seed: int = 27, start: date = date(2026, 7, 15)) -> None:
         self.rng = random.Random(seed)
@@ -73,7 +101,7 @@ class SyntheticCareer:
         ca = max(25, min(pa, int(pa * growth * r.uniform(0.85, 1.0))))
         main = r.choice(_POS)
         pos = [main] + ([r.choice(_POS)] if r.random() < 0.4 and main != "GK" else [])
-        attrs = self._attrs_for(ca, main == "GK")
+        attrs = self._attrs_for(ca, main == "GK", main)
         return _P(
             uid=self._uid(),
             name=f"{r.choice(_FIRST)} {r.choice(_LAST)}",
@@ -92,13 +120,19 @@ class SyntheticCareer:
             expires_year=self.date.year + r.randint(0, 4),
         )
 
-    def _attrs_for(self, ca: int, gk: bool) -> dict[str, int]:
+    def _attrs_for(self, ca: int, gk: bool, position: str = "MC") -> dict[str, int]:
+        """Atributos fictícios coerentes com a posição: os mais relevantes ficam acima da média."""
         r = self.rng
         base = 2 + ca / 200 * 16
+        key_attrs = _position_key_attributes(position)
         out = {}
         gk_keys = {a.fmss_key for a in ATTRIBUTES.values() if a.category == "goalkeeping"}
         for k in _FMSS_ATTR:
             b = base if (k in gk_keys) == gk or k not in gk_keys else 2
+            if k in key_attrs:
+                b += 3.5
+            elif k not in gk_keys:
+                b -= 1.5
             out[k] = max(1, min(20, int(r.gauss(b, 2.5))))
         return out
 

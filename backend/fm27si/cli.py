@@ -29,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--players", type=int, default=300)
     g.add_argument("--seasons", type=int, default=2)
 
+    wd = sub.add_parser("weights-doc", help="Gera a documentação dos pesos do modelo original")
+    wd.add_argument("out", type=Path, nargs="?", default=Path(__file__).resolve().parents[2] / "docs" / "07-PESOS.md")
+
     i = sub.add_parser("integrity", help="Relatório de integridade de uma importação")
     i.add_argument("run_id", type=int)
 
@@ -40,6 +43,14 @@ def main(argv: list[str] | None = None) -> int:
         from fm27si.api import create_app  # noqa: PLC0415
 
         uvicorn.run(create_app(), host="127.0.0.1", port=args.port)
+        return 0
+
+    if args.cmd == "weights-doc":
+        from fm27si.evaluation.defaults import ORIGINAL_NAME, original_spec  # noqa: PLC0415
+        from fm27si.evaluation.docs import weights_markdown  # noqa: PLC0415
+
+        args.out.write_text(weights_markdown(original_spec(), f"07 — Pesos: {ORIGINAL_NAME}"), encoding="utf-8")
+        print(args.out)
         return 0
 
     if args.cmd == "make-test-career":

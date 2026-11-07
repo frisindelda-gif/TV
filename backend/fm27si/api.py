@@ -19,6 +19,7 @@ from fm27si.metrics import METRIC_BY_KEY, METRICS, MIN_MINUTES_FOR_PERCENTILE, P
 from fm27si.config import fmsuperscout_dump_path
 from fm27si.connectors.base import ConnectorError
 from fm27si.db import Database
+from fm27si.evaluation.service import active_model
 from fm27si.importer import import_bundle
 from fm27si.integrity import integrity_report
 from fm27si.orm import (
@@ -29,6 +30,7 @@ from fm27si.orm import (
     SeasonStatLine,
     SnapshotAttributes,
     SnapshotMetrics,
+    PlayerEvaluation,
     ValidationIssue,
 )
 
@@ -94,6 +96,10 @@ class PlayerRow(BaseModel):
     minutes: float | None = None
     metric_key: str | None = None
     metric_value: float | None = None
+    best_position: str | None = None
+    best_position_score: float | None = None
+    best_role: str | None = None
+    best_role_score: float | None = None
 
 
 class PlayerPage(BaseModel):
@@ -312,11 +318,14 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
         run = s.get(ImportRun, run_id) if run_id else _latest_run(s, career_id)
         if run is None:
             raise HTTPException(404, "Importação não encontrada")
-        S, M = PlayerSnapshot, SnapshotMetrics
+        S, M, E = PlayerSnapshot, SnapshotMetrics, PlayerEvaluation
+        model = active_model(s)
         stmt = (
-            select(S, Player.unique_id, Player.nationalities, M.minutes, M.values)
+            select(S, Player.unique_id, Player.nationalities, M.minutes, M.values,
+                   E.best_position, E.best_position_score, E.best_role, E.best_role_score)
             .join(Player, Player.id == S.player_id)
             .outerjoin(M, M.snapshot_id == S.id)
+            .outerjoin(E, (E.snapshot_id == S.id) & (E.model_id == model.id))
             .where(S.run_id == run.id)
         )
         if q:
@@ -384,6 +393,7 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
                 "ca": S.ca, "pa": S.pa, "age": S.age, "name": S.name, "market_value": S.market_value,
                 "wage_weekly": S.wage_weekly, "contract_expires": S.contract_expires, "club": S.club_name,
                 "ca_delta": S.ca_delta, "pa_gap": S.pa - S.ca, "minutes": M.minutes,
+                "best_position_score": E.best_position_score, "best_role_score": E.best_role_score,
             }
             if sort not in cols:
                 raise HTTPException(422, f"Ordenação inválida: {sort}")
@@ -413,8 +423,12 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
                 minutes=minutes,
                 metric_key=metric_key,
                 metric_value=(values or {}).get(metric_key) if metric_key else None,
+                best_position=bp,
+                best_position_score=bps,
+                best_role=br,
+                best_role_score=brs,
             )
-            for snap, uid, nats, minutes, values in s.execute(stmt.limit(limit).offset(offset))
+            for snap, uid, nats, minutes, values, bp, bps, br, brs in s.execute(stmt.limit(limit).offset(offset))
         ]
         return PlayerPage(run_id=run.id, total=total or 0, items=items)
 
@@ -591,6 +605,9 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
             ],
         }
 
+    from fm27si.api_evaluation import register as register_evaluation  # noqa: PLC0415
+
+    register_evaluation(app, get_session, _latest_run)
     _mount_frontend(app)
     return app
 
