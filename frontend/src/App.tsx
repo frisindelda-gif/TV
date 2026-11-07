@@ -1,61 +1,96 @@
-import { useEffect, useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { getJson, type HistoryPoint, type PlayerPage } from "@/api";
-import { Card } from "@/components/ui/card";
+import { Database, Moon, Sun, Users } from "lucide-react";
+import type { ReactNode } from "react";
+import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { ErrorBox, SyntheticBadge } from "@/components/common";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/input";
+import { useCareer } from "@/lib/career";
+import { CONNECTOR_LABEL, fmtDate } from "@/lib/format";
+import { useTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
+import ImportPage from "@/pages/ImportPage";
+import PlayerPage from "@/pages/PlayerPage";
+import PlayersPage from "@/pages/PlayersPage";
 
-// Página de verificação da PoC: confirma que frontend ↔ API ↔ SQLite funcionam.
-// Não é a interface final.
+function NavItem({ to, icon, children }: { to: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        cn(
+          "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+          isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )
+      }
+    >
+      {icon}
+      {children}
+    </NavLink>
+  );
+}
+
 export default function App() {
-  const [page, setPage] = useState<PlayerPage | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<{ name: string; history: HistoryPoint[] } | null>(null);
-
-  useEffect(() => {
-    getJson<PlayerPage>("/api/players?limit=25").then(setPage).catch((e: Error) => setError(e.message));
-  }, []);
-
-  const open = (id: number) =>
-    getJson<{ name: string; history: HistoryPoint[] }>(`/api/players/${id}`).then(setSelected);
+  const { careers, career, latestRun, setCareerId, error } = useCareer();
+  const [theme, toggleTheme] = useTheme();
 
   return (
-    <main className="mx-auto max-w-5xl space-y-4 p-4">
-      <h1 className="text-xl font-semibold">FM27 Scouting Intelligence — verificação da PoC</h1>
-      {error && <Card className="p-4 text-sm">Sem dados: {error}. Importe uma carreira primeiro.</Card>}
-      {page && (
-        <Card className="overflow-x-auto p-0">
-          <div className="p-3 text-sm text-muted-foreground">Importação #{page.run_id} · {page.total} jogadores</div>
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr><th className="p-2">Nome</th><th>Idade</th><th>CA</th><th>PA</th><th>Clube</th><th>Pos.</th></tr>
-            </thead>
-            <tbody>
-              {page.items.map((p) => (
-                <tr key={p.player_id} className="cursor-pointer border-t hover:bg-muted" onClick={() => open(p.player_id)}>
-                  <td className="p-2">{p.name}</td><td>{p.age}</td><td>{p.ca}</td><td>{p.pa}</td>
-                  <td>{p.club}</td><td>{p.positions.join(", ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-      {selected && (
-        <Card className="p-4">
-          <div className="mb-2 font-medium">{selected.name} — evolução de CA/PA</div>
-          <div className="h-56">
-            <ResponsiveContainer>
-              <LineChart data={selected.history}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="game_date" />
-                <YAxis domain={[0, 200]} />
-                <Tooltip />
-                <Line dataKey="ca" name="CA" stroke="hsl(var(--primary))" />
-                <Line dataKey="pa" name="PA" stroke="hsl(var(--muted-foreground))" strokeDasharray="4 2" />
-              </LineChart>
-            </ResponsiveContainer>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+          <div className="flex items-center gap-2 font-semibold">
+            <span className="grid size-7 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">27</span>
+            <span className="hidden sm:inline">Scouting Intelligence</span>
           </div>
-        </Card>
-      )}
-    </main>
+          <nav className="flex items-center gap-1">
+            <NavItem to="/jogadores" icon={<Users className="size-4" />}>Jogadores</NavItem>
+            <NavItem to="/dados" icon={<Database className="size-4" />}>Dados</NavItem>
+          </nav>
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            {careers && careers.length > 0 && (
+              <Select
+                aria-label="Carreira"
+                className="h-8 w-auto max-w-[240px]"
+                value={career?.id ?? ""}
+                onChange={(e) => setCareerId(Number(e.target.value))}
+              >
+                {careers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </Select>
+            )}
+            <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Mudar tema">
+              {theme === "dark" ? <Sun /> : <Moon />}
+            </Button>
+          </div>
+        </div>
+        {latestRun && (
+          <div className="border-t bg-muted/40">
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1 text-xs text-muted-foreground">
+              <span>
+                Última importação: <b className="text-foreground">{CONNECTOR_LABEL[latestRun.connector]}</b>
+              </span>
+              <span>Data no jogo: <b className="text-foreground">{fmtDate(latestRun.game_date)}</b></span>
+              {latestRun.season_label && <span>Época {latestRun.season_label}</span>}
+              <span>{latestRun.player_count.toLocaleString("pt-PT")} jogadores</span>
+              {latestRun.synthetic && <SyntheticBadge />}
+              {latestRun.game_version_supported === false && (
+                <span className="text-warning">Versão do jogo não verificada — dados podem estar errados</span>
+              )}
+            </div>
+          </div>
+        )}
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-5">
+        {error && <div className="mb-4"><ErrorBox message={`Não foi possível contactar o backend: ${error}`} /></div>}
+        <Routes>
+          <Route path="/" element={<Navigate to="/jogadores" replace />} />
+          <Route path="/jogadores" element={<PlayersPage />} />
+          <Route path="/jogador/:id" element={<PlayerPage />} />
+          <Route path="/dados" element={<ImportPage />} />
+          <Route path="*" element={<Navigate to="/jogadores" replace />} />
+        </Routes>
+      </main>
+    </div>
   );
 }

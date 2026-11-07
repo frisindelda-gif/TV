@@ -1,8 +1,12 @@
 # FM27 Scouting Intelligence
 
-Aplicação web **local e pessoal** para scouting no Football Manager 2027. Etapa atual:
-**prova de conceito** (investigação + backend + conectores + testes). A interface completa
-ainda não foi construída.
+Aplicação web **local e pessoal** para scouting no Football Manager 2027.
+
+Etapa atual: **interface v1** sobre a prova de conceito. Funciona de ponta a ponta com a
+carreira de demonstração (dados sintéticos); a leitura do FM27 real ainda não foi testada
+(ver [`docs/03-RESULTADOS-POC.md`](docs/03-RESULTADOS-POC.md), secção 7).
+
+- Interface: [`docs/04-INTERFACE.md`](docs/04-INTERFACE.md)
 
 - Investigação dos projetos FMSuperScout e fmsave: [`docs/01-INVESTIGACAO.md`](docs/01-INVESTIGACAO.md)
 - Arquitetura: [`docs/02-ARQUITETURA.md`](docs/02-ARQUITETURA.md)
@@ -17,9 +21,15 @@ ainda não foi construída.
   (`verified` / `unconfirmed` / `derived` / `estimate`).
 - Cada importação regista a origem, o ficheiro (sha256) e as datas (real e no jogo).
 
-## Instalação (Windows, PowerShell)
+## Instalação rápida (Windows)
 
-Requisitos: Python 3.12+, Node 20+.
+Requisitos: [Python 3.12+](https://www.python.org/downloads/) e [Node.js 20+](https://nodejs.org/).
+
+1. Duplo clique em **`instalar.cmd`** (só da primeira vez e depois de cada atualização).
+2. Duplo clique em **`Iniciar FM27 Scouting.cmd`** — abre `http://127.0.0.1:8727/` no browser.
+3. Em **Dados**, importe o seu save, leia o jogo, ou crie a carreira de demonstração.
+
+## Instalação para desenvolvimento (PowerShell)
 
 ```powershell
 cd backend

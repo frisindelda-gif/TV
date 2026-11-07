@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from fm27si import __version__
-from fm27si.catalog import ATTRIBUTES
+from fm27si.catalog import ATTRIBUTES, POSITION_KEYS
 from fm27si.config import fmsuperscout_dump_path
 from fm27si.connectors.base import ConnectorError
 from fm27si.db import Database
@@ -79,7 +79,9 @@ class PlayerRow(BaseModel):
     ca: int | None
     pa: int | None
     club: str | None
+    nationalities: list[str]
     positions: list[str]
+    natural_positions: list[str]
     market_value: int | None
     wage_weekly: int | None
     contract_expires: date | None
@@ -217,6 +219,52 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
             raise HTTPException(404, "Importação não encontrada")
         return integrity_report(s, run_id)
 
+    @app.get("/api/runs/{run_id}", response_model=RunOut)
+    def run_detail(run_id: int, s: Session = Depends(get_session)):
+        run = s.get(ImportRun, run_id)
+        if run is None:
+            raise HTTPException(404, "Importação não encontrada")
+        return run
+
+    @app.get("/api/filters")
+    def filter_options(career_id: int | None = None, run_id: int | None = None, s: Session = Depends(get_session)):
+        """Valores existentes na importação (clubes, nacionalidades, posições) para os filtros da UI."""
+        run = s.get(ImportRun, run_id) if run_id else _latest_run(s, career_id)
+        if run is None:
+            raise HTTPException(404, "Importação não encontrada")
+        S = PlayerSnapshot
+        clubs = s.execute(
+            select(S.club_name, func.count()).where(S.run_id == run.id, S.club_name.is_not(None))
+            .group_by(S.club_name).order_by(S.club_name)
+        ).all()
+        nats: dict[str, int] = defaultdict(int)
+        for (lst,) in s.execute(select(Player.nationalities).join(S, S.player_id == Player.id).where(S.run_id == run.id)):
+            for n in lst or []:
+                nats[n] += 1
+        return {
+            "run_id": run.id,
+            "game_date": run.game_date,
+            "clubs": [{"name": n, "players": c} for n, c in clubs],
+            "nationalities": [{"name": n, "players": c} for n, c in sorted(nats.items())],
+            "positions": list(POSITION_KEYS),
+        }
+
+    @app.post("/api/import/demo", response_model=list[ImportOut])
+    def import_demo(players: int = Query(400, ge=10, le=20000), seasons: int = Query(3, ge=1, le=5),
+                    s: Session = Depends(get_session)):
+        """Cria uma carreira de DEMONSTRAÇÃO com dados sintéticos (marcados como tal)."""
+        import tempfile  # noqa: PLC0415
+
+        from fm27si.connectors.live_fmsuperscout import FMSuperScoutLiveConnector  # noqa: PLC0415
+        from fm27si.testdata import write_test_career  # noqa: PLC0415
+
+        out = []
+        with tempfile.TemporaryDirectory(prefix="fm27si-demo-") as tmp:
+            for p in write_test_career(Path(tmp), players=players, seasons=seasons):
+                bundle = FMSuperScoutLiveConnector().load(p)
+                out.append(_import_out(import_bundle(s, bundle, career_key="demo|dados-sinteticos")))
+        return out
+
     @app.get("/api/players", response_model=PlayerPage)
     def players(
         s: Session = Depends(get_session),
@@ -227,9 +275,14 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
         position: str | None = None,
         min_ca: int | None = None,
         min_pa: int | None = None,
+        min_age: int | None = None,
         max_age: int | None = None,
+        max_value: int | None = None,
+        nationality: str | None = None,
+        expires_before: date | None = Query(None, description="Contrato termina até esta data"),
+        quality: Literal["ok", "warning", "error"] | None = None,
         min_attr: list[str] = Query(default=[], description="key:valor, p.ex. pace:15"),
-        sort: Literal["ca", "pa", "age", "name", "market_value"] = "ca",
+        sort: Literal["ca", "pa", "age", "name", "market_value", "wage_weekly", "contract_expires", "club"] = "ca",
         order: Literal["asc", "desc"] = "desc",
         limit: int = Query(50, ge=1, le=500),
         offset: int = Query(0, ge=0),
@@ -238,7 +291,7 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
         if run is None:
             raise HTTPException(404, "Importação não encontrada")
         S = PlayerSnapshot
-        stmt = select(S, Player.unique_id).join(Player, Player.id == S.player_id).where(S.run_id == run.id)
+        stmt = select(S, Player.unique_id, Player.nationalities).join(Player, Player.id == S.player_id).where(S.run_id == run.id)
         if q:
             stmt = stmt.where(S.name.ilike(f"%{q}%"))
         if club:
@@ -247,8 +300,18 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
             stmt = stmt.where(S.ca >= min_ca)
         if min_pa is not None:
             stmt = stmt.where(S.pa >= min_pa)
+        if min_age is not None:
+            stmt = stmt.where(S.age >= min_age)
         if max_age is not None:
             stmt = stmt.where(S.age <= max_age)
+        if max_value is not None:
+            stmt = stmt.where(S.market_value <= max_value)
+        if nationality:
+            stmt = stmt.where(func.json(Player.nationalities).ilike(f"%{nationality}%"))
+        if expires_before is not None:
+            stmt = stmt.where(S.contract_expires <= expires_before)
+        if quality:
+            stmt = stmt.where(S.quality == quality)
         if min_attr:
             A = SnapshotAttributes
             stmt = stmt.join(A, A.snapshot_id == S.id)
@@ -266,7 +329,10 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
                 > 0
             )
         total = s.scalar(select(func.count()).select_from(stmt.subquery()))
-        col = {"ca": S.ca, "pa": S.pa, "age": S.age, "name": S.name, "market_value": S.market_value}[sort]
+        col = {
+            "ca": S.ca, "pa": S.pa, "age": S.age, "name": S.name, "market_value": S.market_value,
+            "wage_weekly": S.wage_weekly, "contract_expires": S.contract_expires, "club": S.club_name,
+        }[sort]
         stmt = stmt.order_by(col.desc().nulls_last() if order == "desc" else col.asc().nulls_last(), S.id)
         items = [
             PlayerRow(
@@ -277,13 +343,15 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
                 ca=snap.ca,
                 pa=snap.pa,
                 club=snap.club_name,
+                nationalities=list(nats or []),
                 positions=list(snap.natural_positions or []) + list(snap.accomplished_positions or []),
+                natural_positions=list(snap.natural_positions or []),
                 market_value=snap.market_value,
                 wage_weekly=snap.wage_weekly,
                 contract_expires=snap.contract_expires,
                 quality=snap.quality,
             )
-            for snap, uid in s.execute(stmt.limit(limit).offset(offset))
+            for snap, uid, nats in s.execute(stmt.limit(limit).offset(offset))
         ]
         return PlayerPage(run_id=run.id, total=total or 0, items=items)
 
@@ -375,7 +443,37 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
             ],
         }
 
+    _mount_frontend(app)
     return app
+
+
+def _frontend_dist() -> Path | None:
+    import os  # noqa: PLC0415
+
+    env = os.environ.get("FM27SI_FRONTEND_DIST")
+    cand = Path(env) if env else Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    return cand if (cand / "index.html").is_file() else None
+
+
+def _mount_frontend(app: FastAPI) -> None:
+    """Serve a app compilada (frontend/dist) na mesma origem: um só processo para arrancar."""
+    from fastapi.responses import FileResponse  # noqa: PLC0415
+    from fastapi.staticfiles import StaticFiles  # noqa: PLC0415
+
+    dist = _frontend_dist()
+    if dist is None:
+        return
+    if (dist / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(404, "Endpoint não encontrado")
+        f = (dist / full_path).resolve()
+        if full_path and f.is_file() and dist.resolve() in f.parents:
+            return FileResponse(f)
+        return FileResponse(dist / "index.html")  # rotas do React
 
 
 app = None  # criado por fm27si.cli serve / uvicorn --factory fm27si.api:create_app
