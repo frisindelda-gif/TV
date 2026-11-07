@@ -1,0 +1,80 @@
+{
+ "meta": {
+  "generated": "2026-11-07T18:30:00",
+  "gameDate": "2026-08-20",
+  "gameDateSource": "memory",
+  "gameYear": 2026,
+  "pluginVersion": "1.7.3",
+  "host": "scanner",
+  "game": "FM27",
+  "gameVersion": "27.0",
+  "supportedVersion": "27.0",
+  "versionOk": true,
+  "manager": "Treinador Ficticio",
+  "myClub": "SC Vale Ficticio",
+  "myClubRep": 6200,
+  "currency": "GBP",
+  "source": "FMSuperScout scanner v1.7.3",
+  "synthetic": true
+ },
+ "players": [
+  {
+   "id": 91000001, "name": "Rui Sardinha", "age": 17, "dob": "2009", "birthYear": 2009, "birthDoy": 32,
+   "nat": ["Portugal", "Cabo Verde"], "natId": 31, "club": "SC Vale Ficticio", "div": "Liga Exemplo",
+   "ca": 112, "pa": 178, "wage": 1500, "expires": "2029-06-30",
+   "pos": "AMR, ST", "posArr": ["AMR", "ST"], "posNat": ["AMR"], "teamType": 10,
+   "foot": "Links", "height": 178, "value": 2500000, "askingPrice": 2500000, "wageDemand": null,
+   "listed": false, "loanListed": false, "notForSale": true, "setForRelease": false,
+   "clubRep": 6200, "worldRep": 900,
+   "ambition": 17, "loyalty": 12, "professionalism": 18, "adaptability": 11, "pressure": 14,
+   "sportsmanship": 13, "temperament": 15, "controversy": 3,
+   "attrs": {
+    "Crossing": 12, "Dribbling": 15, "Finishing": 13, "Heading": 8, "LongShots": 11, "Marking": 4,
+    "OffTheBall": 13, "Passing": 12, "PenaltyTaking": 10, "Tackling": 5, "Vision": 13, "Handling": 2,
+    "AerialReach": 1, "CommandOfArea": 2, "Communication": 1, "Kicking": 2, "Throwing": 3,
+    "Anticipation": 11, "Decisions": 10, "OneOnOnes": 2, "Positioning": 5, "Reflexes": 2,
+    "FirstTouch": 14, "Technique": 15, "Flair": 16, "Corners": 9, "Teamwork": 10, "WorkRate": 13,
+    "LongThrows": 4, "Eccentricity": 3, "RushingOut": 2, "Punching": 4, "Acceleration": 16,
+    "FreeKicks": 9, "Strength": 9, "Stamina": 13, "Pace": 17, "JumpingReach": 8, "Leadership": 6,
+    "Balance": 14, "Bravery": 10, "Aggression": 8, "Agility": 15, "NaturalFitness": 14,
+    "Determination": 16, "Composure": 10, "Concentration": 9,
+    "Dirtiness": 5, "Consistency": 11, "ImportantMatches": 12, "InjuryProneness": 6, "Versatility": 9
+   }
+  },
+  {
+   "id": 91000002, "name": "Tiago Valente", "age": 29, "birthYear": 1997, "birthDoy": 200,
+   "nat": ["Brasil"], "club": "Atletico Serra Nova", "ownerClub": "SC Vale Ficticio", "ownerTeamType": 0,
+   "div": "Liga Exemplo", "ca": 141, "pa": 145, "wage": 22000, "expires": "2027-06-30",
+   "pos": "GK", "posArr": ["GK"], "foot": "Rechts", "height": 191, "value": null,
+   "listed": true, "loanListed": false, "notForSale": false, "setForRelease": false,
+   "clubRep": 5100, "worldRep": 3100,
+   "ambition": 10, "loyalty": 15, "professionalism": 13, "adaptability": 12, "pressure": 12,
+   "sportsmanship": 12, "temperament": 10, "controversy": 6,
+   "attrs": {
+    "Crossing": 3, "Dribbling": 3, "Finishing": 2, "Heading": 3, "LongShots": 2, "Marking": 3,
+    "OffTheBall": 2, "Passing": 10, "PenaltyTaking": 5, "Tackling": 3, "Vision": 9, "Handling": 15,
+    "AerialReach": 16, "CommandOfArea": 14, "Communication": 15, "Kicking": 13, "Throwing": 12,
+    "Anticipation": 14, "Decisions": 14, "OneOnOnes": 15, "Positioning": 15, "Reflexes": 16,
+    "FirstTouch": 9, "Technique": 8, "Flair": 5, "Corners": 2, "Teamwork": 12, "WorkRate": 11,
+    "LongThrows": 3, "Eccentricity": 6, "RushingOut": 13, "Punching": 9, "Acceleration": 10,
+    "FreeKicks": 3, "Strength": 13, "Stamina": 11, "Pace": 9, "JumpingReach": 14, "Leadership": 13,
+    "Balance": 11, "Bravery": 15, "Aggression": 9, "Agility": 15, "NaturalFitness": 13,
+    "Determination": 14, "Composure": 14, "Concentration": 15,
+    "Dirtiness": 4, "Consistency": 14, "ImportantMatches": 13, "InjuryProneness": 8, "Versatility": 5
+   }
+  },
+  {
+   "id": 91000003, "name": "Leitura Corrompida", "age": 24, "birthYear": 2002, "birthDoy": 100,
+   "nat": [], "club": null, "div": null, "ca": 0, "pa": 250, "wage": null, "expires": null,
+   "pos": "", "posArr": [], "foot": "Rechts", "value": null,
+   "listed": false, "loanListed": false, "notForSale": false, "setForRelease": false,
+   "clubRep": 0, "worldRep": 0,
+   "attrs": {"Crossing": 1, "Dribbling": 1, "Finishing": 1, "Heading": 1, "LongShots": 1, "Marking": 1,
+    "OffTheBall": 1, "Passing": 1, "PenaltyTaking": 1, "Tackling": 1, "Vision": 1, "Handling": 1,
+    "AerialReach": 1, "CommandOfArea": 1, "Communication": 1, "Kicking": 1, "Throwing": 1,
+    "Anticipation": 1, "Decisions": 1, "OneOnOnes": 1, "Positioning": 1, "Reflexes": 1,
+    "FirstTouch": 1, "Technique": 1, "Flair": 1}
+  }
+ ],
+ "staff": []
+}

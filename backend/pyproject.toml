@@ -1,0 +1,30 @@
+[project]
+name = "fm27si"
+version = "0.1.0"
+description = "FM27 Scouting Intelligence — backend local (prova de conceito)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.7",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+# Save Reader (.fm). Fixado: o layout FM27 muda entre versões do fmsave.
+save = ["fmsave==0.10.0"]
+dev = ["pytest>=8", "httpx>=0.27", "fmsave==0.10.0"]
+
+[project.scripts]
+fm27si = "fm27si.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["fm27si*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
