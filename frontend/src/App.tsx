@@ -1,4 +1,4 @@
-import { Database, LayoutDashboard, Moon, Sun, Users } from "lucide-react";
+import { Database, FlaskConical, LayoutDashboard, Moon, Sun, Trophy, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBox, SyntheticBadge } from "@/components/common";
@@ -9,23 +9,27 @@ import { CONNECTOR_LABEL, fmtDate } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import ImportPage from "@/pages/ImportPage";
+import LabPage from "@/pages/LabPage";
+import RankingsPage from "@/pages/RankingsPage";
 import OverviewPage from "@/pages/OverviewPage";
 import PlayerPage from "@/pages/PlayerPage";
 import PlayersPage from "@/pages/PlayersPage";
 
-function NavItem({ to, icon, children }: { to: string; icon: ReactNode; children: ReactNode }) {
+function NavItem({ to, icon, children }: { to: string; icon: ReactNode; children: string }) {
   return (
     <NavLink
       to={to}
+      title={children}
+      aria-label={children}
       className={({ isActive }) =>
         cn(
-          "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+          "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
           isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )
       }
     >
       {icon}
-      {children}
+      <span className="hidden lg:inline">{children}</span>
     </NavLink>
   );
 }
@@ -40,11 +44,13 @@ export default function App() {
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
           <div className="flex items-center gap-2 font-semibold">
             <span className="grid size-7 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">27</span>
-            <span className="hidden md:inline">Scouting Intelligence</span>
+            <span className="hidden xl:inline">Scouting Intelligence</span>
           </div>
-          <nav className="flex items-center gap-1">
+          <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
             <NavItem to="/painel" icon={<LayoutDashboard className="size-4" />}>Painel</NavItem>
             <NavItem to="/jogadores" icon={<Users className="size-4" />}>Jogadores</NavItem>
+            <NavItem to="/rankings" icon={<Trophy className="size-4" />}>Rankings</NavItem>
+            <NavItem to="/lab" icon={<FlaskConical className="size-4" />}>Lab</NavItem>
             <NavItem to="/dados" icon={<Database className="size-4" />}>Dados</NavItem>
           </nav>
           <div className="ml-auto flex min-w-0 items-center gap-2">
@@ -91,6 +97,8 @@ export default function App() {
           <Route path="/jogadores" element={<PlayersPage />} />
           <Route path="/jogador/:id" element={<PlayerPage />} />
           <Route path="/dados" element={<ImportPage />} />
+          <Route path="/rankings" element={<RankingsPage />} />
+          <Route path="/lab" element={<LabPage />} />
           <Route path="*" element={<Navigate to="/jogadores" replace />} />
         </Routes>
       </main>

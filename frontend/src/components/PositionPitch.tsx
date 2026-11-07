@@ -11,9 +11,10 @@ const ROWS: (string | null)[][] = [
   [null, "GK", null],
 ];
 
+// Códigos portugueses usados em toda a app (GR, DD, DC, DE, MDC, MC, MD, MO, ME, AD, PL, AE).
 const LABEL: Record<string, string> = {
-  GK: "GR", SW: "LIB", DL: "DE", DC: "DC", DR: "DD", WBL: "AE", WBR: "AD", DM: "MDC",
-  ML: "ME", MC: "MC", MR: "MD", AML: "EE", AMC: "MOC", AMR: "ED", ST: "PL",
+  GK: "GR", SW: "LIB", DL: "DE", DC: "DC", DR: "DD", WBL: "ALE", WBR: "ALD", DM: "MDC",
+  ML: "ME", MC: "MC", MR: "MD", AML: "AE", AMC: "MO", AMR: "AD", ST: "PL",
 };
 
 type Props = { ratings: Record<string, number>; natural: string[]; accomplished: string[] };

@@ -149,7 +149,8 @@ def register(app: FastAPI, get_session, latest_run) -> None:  # noqa: C901 - reg
     @app.post("/api/evaluation/models/{model_id}/duplicate")
     def duplicate_model(model_id: int, s: Session = Depends(get_session)):
         base = model_or_404(s, model_id)
-        return create_model(ModelCreate(name=f"{base.name} (cópia)", description=base.description, base_id=base.id), s)
+        desc = None if base.builtin else base.description  # a nota "duplique para editar" não se aplica à cópia
+        return create_model(ModelCreate(name=f"{base.name} (cópia)", description=desc, base_id=base.id), s)
 
     @app.post("/api/evaluation/models/{model_id}/reset")
     def reset_model(model_id: int, s: Session = Depends(get_session)):

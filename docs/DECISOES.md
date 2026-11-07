@@ -58,3 +58,22 @@ Formato curto: contexto → decisão → consequências. Uma decisão só muda c
 - Não existe (nem pode ser publicado) um save real neste repositório. O gerador
   `fm27si/testdata.py` produz dumps no formato FMSuperScout marcados `synthetic: true`;
   tudo o que vem daí fica marcado na BD (`import_runs.synthetic`).
+
+## D-11 — Avaliação como dados, motor separado
+- Métricas, posições e funções são uma especificação validada (JSON), não código. O motor
+  é puro (sem BD/HTTP) e o mesmo cálculo serve um jogador ou o lote inteiro.
+- Métricas referem atributos; posições e funções referem métricas (sem duplicar atributos).
+
+## D-12 — Dados em falta nunca são zero
+- Média ponderada só sobre o disponível + cobertura; abaixo do mínimo não se calcula.
+
+## D-13 — Modelo original imutável, versões identificadas por hash
+- O original só se altera numa nova versão da app; o utilizador trabalha em cópias.
+- `spec_hash` em cada avaliação garante reprodutibilidade e deteta rankings desatualizados.
+
+## D-14 — Funções só as pedidas, todas por confirmar
+- Não é possível ler a lista de funções do FM27 instalado; incluem-se apenas as 13 pedidas,
+  marcadas `unconfirmed`, desativáveis no Lab.
+
+## D-15 — numpy para o motor
+- 60 000 jogadores em ~0,6 s; sem numpy seriam dezenas de segundos por recálculo.

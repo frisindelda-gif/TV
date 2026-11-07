@@ -10,6 +10,9 @@ Visão geral da carreira: números gerais, distribuições de CA e PA, maiores s
 novos, maiores potenciais, melhores em campo, resumo por posição e por clube. Ver
 [`05-METRICAS.md`](05-METRICAS.md).
 
+### Rankings (`/rankings`) e Position Lab (`/lab`)
+Ver [`06-AVALIACAO.md`](06-AVALIACAO.md).
+
 ### Jogadores (`/jogadores`)
 - Tabela ordenável: nome, idade, posições (naturais a negrito), nacionalidade, clube, CA, PA,
   valor, salário semanal, fim de contrato, qualidade da leitura.

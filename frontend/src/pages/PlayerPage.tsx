@@ -12,6 +12,7 @@ import {
   StatusBadge,
   SyntheticBadge,
 } from "@/components/common";
+import { EvaluationSection } from "@/components/evaluation/EvaluationSection";
 import { PerformanceCard } from "@/components/Performance";
 import { POSITION_LABEL, PositionPitch } from "@/components/PositionPitch";
 import { Badge } from "@/components/ui/badge";
@@ -162,6 +163,8 @@ export default function PlayerPage() {
           </div>
         </CardContent>
       </Card>
+
+      <EvaluationSection playerId={p.player_id} runId={viewingOld ? p.provenance.run_id : null} />
 
       {/* Atributos + posições */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">

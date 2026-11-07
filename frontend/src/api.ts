@@ -63,6 +63,10 @@ export type PlayerRow = {
   minutes: number | null;
   metric_key: string | null;
   metric_value: number | null;
+  best_position: string | null;
+  best_position_score: number | null;
+  best_role: string | null;
+  best_role_score: number | null;
 };
 
 export type MetricDef = {
@@ -245,11 +249,18 @@ export type ImportOut = {
 };
 
 async function handle<T>(r: Response): Promise<T> {
+  return handleResponse<T>(r);
+}
+
+async function handleResponse<T>(r: Response): Promise<T> {
   if (!r.ok) {
     let msg = `${r.status}`;
     try {
       const body = await r.json();
-      msg = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
+      if (typeof body.detail === "string") msg = body.detail;
+      else if (Array.isArray(body.detail))
+        msg = body.detail.map((d: { loc?: unknown[]; msg?: string }) => `${(d.loc ?? []).join(".")}: ${d.msg}`).join(" · ");
+      else msg = JSON.stringify(body.detail ?? body);
     } catch {
       msg = `${r.status} ${r.statusText}`;
     }
@@ -268,4 +279,141 @@ export function postJson<T>(url: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then((r) => handle<T>(r));
+}
+
+// ------------------------------------------------------------- avaliação
+export type Confidence = "high" | "medium" | "low";
+export type MetricCategory = "technical" | "mental" | "physical" | "tactical" | "position_specific";
+
+export type SpecAttributeWeight = { attribute: string; weight: number; invert: boolean };
+export type SpecMetricWeight = { metric: string; weight: number };
+export type SpecMetric = {
+  key: string;
+  name: string;
+  description: string;
+  category: MetricCategory;
+  positions: string[];
+  attributes: SpecAttributeWeight[];
+};
+export type SpecPosition = { key: string; metrics: SpecMetricWeight[] };
+export type SpecRole = {
+  key: string;
+  name: string;
+  description: string;
+  positions: string[];
+  metrics: SpecMetricWeight[];
+  enabled: boolean;
+  availability: "confirmed" | "unconfirmed";
+};
+export type EvaluationSpec = {
+  schema_version: 1;
+  min_coverage: number;
+  metrics: SpecMetric[];
+  positions: SpecPosition[];
+  roles: SpecRole[];
+};
+
+export type EvalModel = {
+  id: number;
+  key: string;
+  name: string;
+  description: string | null;
+  builtin: boolean;
+  active: boolean;
+  base_key: string | null;
+  spec_hash: string;
+  created_at: string;
+  updated_at: string;
+  modified_from_original: boolean;
+};
+export type EvalModelFull = EvalModel & {
+  spec: EvaluationSpec;
+  metrics: (SpecMetric & { formula: string; used_by_positions: string[]; used_by_roles: string[]; category_label: string })[];
+};
+
+export type EvalCatalog = {
+  positions: { key: string; pt: string; name: string }[];
+  ranking_groups: { key: string; label: string; positions: string[] }[];
+  categories: Record<MetricCategory, string>;
+  attributes: AttributeDef[];
+  scale: string;
+};
+
+export type ScoreItem = { key: string; name: string; score: number | null; coverage: number; confidence: Confidence };
+export type MetricResult = ScoreItem & {
+  category: MetricCategory;
+  attributes: { attribute: string; value: number; normalized: number; weight: number; invert: boolean }[];
+  missing: string[];
+};
+
+export type RankedNeighbour = { player_id: number; name: string; age: number | null; club: string | null; ca: number | null; pa: number | null; score: number };
+
+export type PlayerEvaluation = {
+  model: { id: number; name: string; spec_hash: string; builtin: boolean };
+  data_status: FieldStatus | null;
+  eligible_positions: string[];
+  focus: string | null;
+  positions: (ScoreItem & { pt: string; eligible: boolean; familiarity: number | null; position_mean: number | null })[];
+  roles: (ScoreItem & { positions: string[]; availability: string; eligible: boolean })[];
+  metrics: MetricResult[];
+  comparison: { metric: string; name: string; category: MetricCategory; weight_share: number; score: number | null; position_mean: number | null; diff: number | null; coverage: number }[];
+  position_mean_score: number | null;
+  position_players: number;
+  attributes_vs_position: { attribute: string; label: string; value: number | null; position_mean: number | null }[];
+  strengths: PlayerEvaluation["comparison"];
+  weaknesses: PlayerEvaluation["comparison"];
+  ranking: {
+    position: string;
+    rank: number;
+    of: number;
+    percentile: number | null;
+    above: RankedNeighbour[];
+    below: RankedNeighbour[];
+    top: RankedNeighbour[];
+  } | null;
+  stored_state: "fresh" | "stale" | null;
+};
+
+export type RankingItem = {
+  rank: number;
+  player_id: number;
+  name: string;
+  age: number | null;
+  club: string | null;
+  nationalities: string[];
+  positions: string[];
+  natural_positions: string[];
+  ca: number | null;
+  pa: number | null;
+  ca_delta: number | null;
+  market_value: number | null;
+  score: number | null;
+  group_positions: Record<string, number | null>;
+  best_position: string | null;
+  best_role: string | null;
+  best_role_score: number | null;
+  role_scores: Record<string, number>;
+  confidence: Confidence;
+  incomplete: boolean;
+};
+
+export type Rankings = {
+  run_id: number;
+  model: { id: number; name: string; spec_hash: string };
+  group: string;
+  label: string;
+  positions: string[];
+  total: number;
+  items: RankingItem[];
+  state: "fresh" | "stale" | "missing";
+};
+
+export function putJson<T>(url: string, body: unknown): Promise<T> {
+  return fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
+    handleResponse<T>(r),
+  );
+}
+
+export function deleteJson<T>(url: string): Promise<T> {
+  return fetch(url, { method: "DELETE" }).then((r) => handleResponse<T>(r));
 }

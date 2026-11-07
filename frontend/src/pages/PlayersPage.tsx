@@ -7,7 +7,9 @@ import { POSITION_LABEL } from "@/components/PositionPitch";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/input";
+import { ScoreValue } from "@/components/evaluation/common";
 import { useCareer } from "@/lib/career";
+import { useEvaluation } from "@/lib/evaluation";
 import { METRIC_GROUP_LABEL, fmtDate, fmtInt, fmtMetric, fmtMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +49,7 @@ const ASC_DEFAULT = new Set(["name", "club", "age", "contract_expires"]);
 
 export default function PlayersPage() {
   const { careers, career, attributes, attrLabel, metrics: catalog, metricDef } = useCareer();
+  const { posPt, roleName } = useEvaluation();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(params));
@@ -426,6 +429,8 @@ export default function PlayersPage() {
                   <option value="ca">CA</option>
                   <option value="pa">PA</option>
                   <option value="pa_gap">Margem de progressão (PA − CA)</option>
+                  <option value="best_position_score">Position Score (melhor posição)</option>
+                  <option value="best_role_score">Role Score (melhor função)</option>
                   <option value="ca_delta">CA ganho desde a anterior</option>
                   <option value="age">Idade</option>
                   <option value="market_value">Valor</option>
@@ -482,6 +487,7 @@ export default function PlayersPage() {
                 </div>
                 <div className="truncate text-xs text-muted-foreground">
                   {p.age ?? "—"} anos · {p.positions.map((x) => POSITION_LABEL[x] ?? x).join(" ")} · {p.club ?? "Sem clube"}
+                  {p.best_position && <> · melhor {posPt(p.best_position)} <ScoreValue v={p.best_position_score} /></>}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {metricCol && p.metric_value !== null
@@ -501,7 +507,7 @@ export default function PlayersPage() {
 
         <Card className={cn("hidden overflow-hidden sm:block", loading && "opacity-70")}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
                 <tr>
                   <Th k="name" sort={sort} order={order} onSort={setSort} className="pl-4">Nome</Th>
@@ -509,6 +515,7 @@ export default function PlayersPage() {
                   <th className="px-2 py-2 font-medium">Pos.</th>
                   <th className="px-2 py-2 font-medium">Nac.</th>
                   <Th k="club" sort={sort} order={order} onSort={setSort}>Clube</Th>
+                  <Th k="best_position_score" sort={sort} order={order} onSort={setSort}>Melhor pos.</Th>
                   <Th k="ca" sort={sort} order={order} onSort={setSort} align="center">CA</Th>
                   <Th k="pa" sort={sort} order={order} onSort={setSort} align="center">PA</Th>
                   {showGrowth && <Th k="ca_delta" sort={sort} order={order} onSort={setSort} align="right">Δ CA</Th>}
@@ -546,6 +553,9 @@ export default function PlayersPage() {
                     </td>
                     <td className="max-w-[110px] truncate px-2 text-xs text-muted-foreground">{p.nationalities.join(", ") || "—"}</td>
                     <td className="max-w-[180px] truncate px-2">{p.club ?? <span className="text-muted-foreground">Sem clube</span>}</td>
+                    <td className="whitespace-nowrap px-2 text-xs" title={p.best_role ? `Melhor função: ${roleName(p.best_role)}` : undefined}>
+                      {p.best_position ? <>{posPt(p.best_position)} <ScoreValue v={p.best_position_score} className="ml-0.5" /></> : "—"}
+                    </td>
                     <td className="px-2 text-center"><AbilityPill value={p.ca} /></td>
                     <td className="px-2 text-center"><AbilityPill value={p.pa} /></td>
                     {showGrowth && <td className="px-2 text-right"><Delta v={p.ca_delta} /></td>}
