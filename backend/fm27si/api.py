@@ -264,7 +264,7 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
         }
 
     @app.post("/api/import/demo", response_model=list[ImportOut])
-    def import_demo(players: int = Query(400, ge=10, le=20000), seasons: int = Query(3, ge=1, le=5),
+    def import_demo(players: int = Query(1200, ge=10, le=20000), seasons: int = Query(3, ge=1, le=5),
                     s: Session = Depends(get_session)):
         """Cria uma carreira de DEMONSTRAÇÃO com dados sintéticos (marcados como tal)."""
         from fm27si.testdata import demo_bundles  # noqa: PLC0415
@@ -608,6 +608,9 @@ def create_app(db: Database | None = None, *, save_connector=None, live_connecto
     from fm27si.api_evaluation import register as register_evaluation  # noqa: PLC0415
 
     register_evaluation(app, get_session, _latest_run)
+    from fm27si.api_stats import register as register_stats  # noqa: PLC0415
+
+    register_stats(app, get_session, _latest_run)
     _mount_frontend(app)
     return app
 

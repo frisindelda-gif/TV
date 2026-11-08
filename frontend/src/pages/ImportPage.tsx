@@ -181,14 +181,14 @@ export default function ImportPage() {
           <CardHeader><CardTitle className="flex items-center gap-1.5"><FlaskConical className="size-4" /> Demonstração</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Cria uma carreira fictícia com 400 jogadores e 3 épocas para experimentar a app sem o jogo. Fica sempre
+              Cria uma carreira fictícia com 1 200 jogadores (12 clubes, 2 ligas) e 3 épocas para experimentar a app sem o jogo. Fica sempre
               marcada como <b>dados sintéticos</b>.
             </p>
             <Button
               variant="outline"
               disabled={busy !== null}
               className="w-full"
-              onClick={() => void run("demo", () => postJson<ImportOut[]>("/api/import/demo?players=400&seasons=3"))}
+              onClick={() => void run("demo", () => postJson<ImportOut[]>("/api/import/demo?players=1200&seasons=3"))}
             >
               {busy === "demo" ? <Loader2 className="animate-spin" /> : null} Criar carreira de demonstração
             </Button>

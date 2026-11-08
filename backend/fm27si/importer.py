@@ -335,6 +335,15 @@ def _import_bundle(session: Session, bundle: ImportBundle, *, career_key: str | 
     except Exception as e:  # a avaliação nunca deve impedir a importação dos dados
         warnings.append(f"Avaliação por posição não calculada: {type(e).__name__}: {e}")
 
+    # ------------------------- Statistical Scouting: campos, disponibilidade, descoberta
+    from fm27si.stats.service import process_run  # noqa: PLC0415
+
+    try:
+        with session.begin_nested():
+            process_run(session, run)
+    except Exception as e:  # nunca impede a importação dos dados
+        warnings.append(f"Análise estatística não calculada: {type(e).__name__}: {e}")
+
     run.player_count = len(plan)
     run.error_count = sum(1 for iss in all_issues if any(i.severity == "error" for i in iss))
     run.warning_count = sum(1 for iss in all_issues if quality_of(iss) == "warning")

@@ -65,6 +65,32 @@ _STAT_EXTRA = (
 )
 
 
+# Campos de identificação/colunas já guardadas à parte (não vão para ``extra``).
+_STAT_NOT_EXTRA = {
+    "player_uid", "player_name", "kind", "team_id", "club_uid", "club_name", "club_short_name", "team_slot",
+    "starts", "substitute_appearances", "minutes", "goals", "assists", "average_rating", "player_of_the_match",
+    "expected_goals", "expected_assists", "yellow_cards", "red_cards", "clean_sheets",
+}
+
+
+def _all_numeric_stats(s: Any) -> dict[str, float | int | None]:
+    """TODOS os campos numéricos da linha de estatísticas (a descoberta automática precisa deles)."""
+    import dataclasses  # noqa: PLC0415
+
+    if dataclasses.is_dataclass(s):
+        names = [f.name for f in dataclasses.fields(s)]
+    else:  # objetos de teste simples
+        names = [n for n in vars(s) if not n.startswith("_")]
+    out: dict[str, float | int | None] = {}
+    for n in names:
+        if n in _STAT_NOT_EXTRA:
+            continue
+        v = getattr(s, n, None)
+        if v is None or (isinstance(v, (int, float)) and not isinstance(v, bool)):
+            out[n] = v
+    return out
+
+
 def _import_fmsave():
     try:
         import fmsave  # noqa: PLC0415
@@ -222,7 +248,7 @@ class FmsaveSaveConnector:
             yellow_cards=s.yellow_cards,
             red_cards=s.red_cards,
             clean_sheets=s.clean_sheets,
-            extra={k: getattr(s, k) for k in _STAT_EXTRA if hasattr(s, k)},
+            extra=_all_numeric_stats(s),
         )
 
     @staticmethod

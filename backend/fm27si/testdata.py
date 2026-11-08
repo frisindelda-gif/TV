@@ -25,8 +25,16 @@ _FIRST = ["Rui", "Tiago", "João", "Miguel", "André", "Diogo", "Bruno", "Luís"
           "Hugo", "Gonçalo", "Rafael", "Vasco", "Duarte", "Tomás", "Afonso", "Martim", "Simão", "Íñigo"]
 _LAST = ["Sardinha", "Valente", "Carvalhal", "Mourato", "Pestana", "Quaresma", "Teixeira", "Brandão",
          "Lobato", "Fontes", "Rebelo", "Seixas", "Moita", "Calado", "Peixoto", "Arruda", "Bettencourt"]
-_CLUBS = [("SC Vale Fictício", 6200, "Liga Exemplo"), ("Atlético Serra Nova", 5100, "Liga Exemplo"),
-          ("FC Ribeira Imaginária", 4300, "Liga Exemplo"), ("União Planalto Teste", 2500, "Segunda Exemplo")]
+_CLUBS = [
+    # Liga Exemplo (8 clubes)
+    ("SC Vale Fictício", 6200, "Liga Exemplo"), ("Atlético Serra Nova", 5100, "Liga Exemplo"),
+    ("FC Ribeira Imaginária", 4300, "Liga Exemplo"), ("Desportivo Monte Claro", 4100, "Liga Exemplo"),
+    ("CF Lagoa Azul", 3900, "Liga Exemplo"), ("Sporting Vila Alta", 3700, "Liga Exemplo"),
+    ("Académico Porto Seco", 3400, "Liga Exemplo"), ("GD Pinhal Verde", 3200, "Liga Exemplo"),
+    # Segunda Exemplo (4 clubes)
+    ("União Planalto Teste", 2500, "Segunda Exemplo"), ("CD Rio Calmo", 2300, "Segunda Exemplo"),
+    ("SC Arcos Novos", 2100, "Segunda Exemplo"), ("AD Quinta Funda", 1900, "Segunda Exemplo"),
+]
 _NATS = ["Portugal", "Brasil", "Cabo Verde", "Angola", "Espanha"]
 _POS = ["GK", "DL", "DC", "DR", "DM", "MC", "ML", "MR", "AML", "AMC", "AMR", "ST", "WBL", "WBR"]
 
@@ -311,7 +319,21 @@ def _season_stats(p, group: str, minutes: int, club: str, rng: random.Random):
         "mistakes_leading_to_goal": cnt(0.02 * (1.6 - _f(a["Concentration"]))),
         "non_penalty_expected_goals": round(xg * 0.88, 2),
         "rated_appearances": apps,
+        # Restantes campos que o fmsave expõe (para a demonstração refletir um save real).
+        "goals_outside_box": int(round(goals * 0.15)),
+        "shots_outside_box": int(round(shots * (0.2 + 0.02 * a["LongShots"]))),
+        "free_kick_shots": cnt(0.05 * _f(a["FreeKicks"])),
+        "penalties_taken": (pk := cnt(0.03 if group in ("ST", "AM") else 0.0)),
+        "penalties_scored": min(goals, int(round(pk * 0.75))),
+        "open_play_key_passes": None,
+        "open_play_crosses_attempted": int(round(crosses * 0.8)),
+        "open_play_crosses_completed": None,
+        "offsides": cnt({"ST": 0.6, "W": 0.3}.get(group, 0.05)),
+        "key_headers": cnt(0.3 if group in ("CB", "ST") else 0.05),
+        "key_tackles": cnt(0.15 if group in ("CB", "FB", "DM") else 0.03),
     }
+    extra["open_play_key_passes"] = int(round(extra["key_passes"] * 0.85))
+    extra["open_play_crosses_completed"] = int(round(extra["crosses_completed"] * 0.8))
     clean = None
     if group == "GK":
         faced = cnt(3.8)

@@ -186,6 +186,7 @@ SnapshotAttributes = type(
 
 class SeasonStatLine(Base):
     __tablename__ = "season_stats"
+    __table_args__ = (Index("ix_season_stats_snap_kind", "snapshot_id", "competition_kind"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     snapshot_id: Mapped[int] = mapped_column(ForeignKey("player_snapshots.id", ondelete="CASCADE"), index=True)
     season: Mapped[str | None] = mapped_column(String(20))
@@ -291,3 +292,122 @@ class EvaluationBaseline(Base):
     score_mean: Mapped[float | None] = mapped_column(Float, nullable=True)
     metric_means: Mapped[dict] = mapped_column(JSON)
     attribute_means: Mapped[dict] = mapped_column(JSON)
+
+
+# ---------------------------------------------------------------------------
+# Statistical Scouting
+# ---------------------------------------------------------------------------
+
+
+class MetricDefinitionRow(Base):
+    """Definição de métrica. Built-in sincronizadas do código; personalizadas criadas por aprovação."""
+
+    __tablename__ = "metric_definitions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True)
+    builtin: Mapped[bool] = mapped_column(Boolean)
+    category: Mapped[str] = mapped_column(String(40), index=True)
+    definition: Mapped[dict] = mapped_column(JSON)
+    groups: Mapped[list] = mapped_column(JSON, default=list)  # grupos de posição (personalizadas)
+    custom_field: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {key, name, unit, description}
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class PositionMetricMappingRow(Base):
+    __tablename__ = "position_metric_mappings"
+    __table_args__ = (Index("ix_pmm_group_metric", "group_key", "metric_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_key: Mapped[str] = mapped_column(String(8))
+    section: Mapped[str] = mapped_column(String(120))
+    position: Mapped[int] = mapped_column(Integer)  # ordem na secção
+    metric_key: Mapped[str] = mapped_column(String(80))
+    view: Mapped[str] = mapped_column(String(8))  # total | p90
+
+
+class SaveStatField(Base):
+    """Inventário dos campos estatísticos encontrados numa importação (descoberta)."""
+
+    __tablename__ = "save_stat_fields"
+    __table_args__ = (UniqueConstraint("run_id", "raw_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("import_runs.id", ondelete="CASCADE"), index=True)
+    data_source: Mapped[str | None] = mapped_column(String(40))
+    raw_key: Mapped[str] = mapped_column(String(80))
+    mapped_field: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    players_with_value: Mapped[int] = mapped_column(Integer)
+    min_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mean_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    integer_share: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class SaveMetricAvailability(Base):
+    __tablename__ = "save_metric_availability"
+    __table_args__ = (UniqueConstraint("run_id", "metric_key"), Index("ix_sma_run_status", "run_id", "status"))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("import_runs.id", ondelete="CASCADE"))
+    metric_key: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(12))  # AVAILABLE CALCULABLE PARTIAL UNAVAILABLE INVALID CUSTOM
+    formula_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    players_with_value: Mapped[int] = mapped_column(Integer, default=0)
+    missing_fields: Mapped[list] = mapped_column(JSON, default=list)
+    reason: Mapped[str] = mapped_column(Text)
+    computed_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class MetricDiscoveryProposal(Base):
+    __tablename__ = "metric_discovery_proposals"
+    __table_args__ = (UniqueConstraint("data_source", "raw_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data_source: Mapped[str] = mapped_column(String(40))
+    raw_key: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending approved rejected
+    first_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    proposal: Mapped[dict] = mapped_column(JSON)  # significado, unidade, tipo, posições, equivalente…
+    sample: Mapped[dict] = mapped_column(JSON)
+    created_metric_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CompositeScoreDefinition(Base):
+    __tablename__ = "composite_score_definitions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    group_key: Mapped[str] = mapped_column(String(8))
+    components: Mapped[list] = mapped_column(JSON)  # [{metric, weight, invert}]
+    min_coverage: Mapped[float] = mapped_column(Float, default=0.6)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class SavedSearch(Base):
+    __tablename__ = "saved_searches"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(20), default="filter")  # filter | identification | market
+    definition: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class Shortlist(Base):
+    __tablename__ = "shortlists"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ShortlistItem(Base):
+    __tablename__ = "shortlist_items"
+    __table_args__ = (UniqueConstraint("shortlist_id", "player_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shortlist_id: Mapped[int] = mapped_column(ForeignKey("shortlists.id", ondelete="CASCADE"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"))
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime)
