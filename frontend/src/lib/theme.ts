@@ -10,7 +10,7 @@ function initial(): Theme {
   } catch {
     /* ignorar */
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "dark"; // identidade visual da app: tema escuro por omissão
 }
 
 export function useTheme(): [Theme, () => void] {

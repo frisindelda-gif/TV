@@ -146,9 +146,10 @@ def load_run_stats(s: Session, run: ImportRun, catalog: Catalog, scope: str, cus
                S.preferred_foot, S.foot_left, S.foot_right, S.height_cm, S.club_name, S.division,
                S.natural_positions, S.accomplished_positions, S.contract, Player.nationalities)
         .join(Player, Player.id == S.player_id)
-        .where(S.run_id == run.id, S.id.in_(list(lines_by_snap)) if lines_by_snap else S.id < 0)
+        .where(S.run_id == run.id)
         .order_by(S.id)
     ).all()
+    meta = [r for r in meta if r.id in lines_by_snap]  # só jogadores com estatísticas (sem IN gigante)
 
     fields = list(catalog.fields)
     fidx = {f: i for i, f in enumerate(fields)}

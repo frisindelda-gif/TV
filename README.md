@@ -8,6 +8,7 @@ carreira de demonstração (dados sintéticos); a leitura do FM27 real ainda nã
 
 - Interface: [`docs/04-INTERFACE.md`](docs/04-INTERFACE.md)
 - Métricas: [`docs/05-METRICAS.md`](docs/05-METRICAS.md)
+- Statistical Scouting: [`docs/08-STATISTICAL-SCOUTING.md`](docs/08-STATISTICAL-SCOUTING.md)
 - Avaliação por posição e função: [`docs/06-AVALIACAO.md`](docs/06-AVALIACAO.md) · pesos: [`docs/07-PESOS.md`](docs/07-PESOS.md)
 
 - Investigação dos projetos FMSuperScout e fmsave: [`docs/01-INVESTIGACAO.md`](docs/01-INVESTIGACAO.md)

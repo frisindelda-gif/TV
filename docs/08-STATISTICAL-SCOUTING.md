@@ -68,3 +68,58 @@ há uma importação nova. Mudar um filtro visual não recalcula percentis já c
 8. Market Opportunities · 9. Testes e desempenho.
 
 Cada fase tem testes próprios e só se avança com eles a passar.
+
+## 5. O que foi implementado (por fase)
+
+| Fase | Resultado | Testes |
+|---|---|---|
+| 1. Catálogo global | 125 métricas, 108 campos de origem, 225 vistas (total e /90); mapa por posição com 553 entradas em 9 grupos e todas as secções do documento (o teste confere o número de itens de cada secção); 28 entradas transversais; 6 Composite Scores iniciais | `test_stats_catalog.py` |
+| 2. Motor de métricas derivadas | Totais, /90, percentagens, rácios, derivadas e fórmulas alternativas (p.ex. defesas = agarradas + para a frente + desviadas) | `test_stats_engine.py` (cada percentagem, derivada e regra de NULL) |
+| 3. Percentis e rankings | Universo configurável, percentil com empates a meio, direção, ranking, média, mediana, melhor, pior, cobertura, amostra mínima | `test_stats_percentiles.py` |
+| 4. Composite Scores | Pesos editáveis, inversão, normalização pelos pesos disponíveis, cobertura mínima, modelos iniciais só de leitura, duplicar/criar | `test_stats_api.py` |
+| 5. Interface | 11 secções em `/stats` + perfil estatístico no perfil do jogador (9 separadores) | testes de browser |
+| 6. Descoberta | Inventário dos campos do save, mapeamento por fonte, propostas com significado, unidade, tipo, posições e equivalente; aprovação/rejeição | `test_stats_api.py` |
+| 7. Disponibilidade | Seis estados por importação, com explicação; nunca altera o catálogo | `test_stats_api.py` |
+| 8. Market Opportunities | Desempenho (Composite ou percentil) × valor, salário, contrato, transferível/emprestável, PA − CA; "£ por ponto" identificado como derivado | `test_stats_api.py` |
+| 9. Volume | Ver abaixo | medições manuais |
+
+## 6. O que um save do fmsave fornece (medido na demonstração, que usa os mesmos campos)
+
+- **36 AVAILABLE**, **18 CALCULABLE**, **2 PARTIAL**, **69 UNAVAILABLE**, **0 INVALID** (de 125).
+- Indisponíveis porque o fmsave não expõe o campo: ações defensivas, cortes, duelos
+  defensivos/ofensivos/totais, conduções, dribles tentados, passes longos, verticais, para o
+  último terço, que quebram linhas, toques, recuperações por meio-campo, pressões por zona,
+  golos de cabeça/pé, grandes ocasiões falhadas, etc. Continuam no catálogo.
+- 16 campos do save sem correspondência no catálogo foram propostos como novas métricas
+  (xG, npxG, xA, nota média, distância, sprints, foras de jogo, desarmes e cabeceamentos
+  decisivos, passes-chave e cruzamentos em jogo corrido, remates de livre, golos de fora da
+  área, penáltis batidos, melhor em campo).
+- Consequência nos Composite Scores iniciais: "Central Defensivo Dominante" fica com 57 % das
+  componentes e "Central Construtor" e "Extremo Desequilibrador" com 43 %, abaixo da
+  cobertura mínima de 60 %: não mostram score (mostram a cobertura). Pode-se duplicá-los com
+  outra cobertura mínima ou outras componentes.
+
+## 7. Desempenho (100 000 jogadores com estatísticas)
+
+| Operação | Tempo |
+|---|---|
+| Importar + avaliar + estatísticas | 43 s |
+| 1.ª consulta depois de arrancar a app (carrega a importação para a cache) | 5 s |
+| Pesquisa/ranking seguintes | 20–240 ms |
+| Filtro E/OU com percentis | 130 ms |
+| Perfil estatístico (1.ª vez / seguintes) | 1,4 s / 70 ms |
+| Comparação, overview, mercado, exportação CSV | < 100 ms |
+
+Defeito encontrado e corrigido pelo teste de volume: uma consulta com milhares de ids
+excedia o limite de parâmetros do SQLite.
+
+## 8. Limitações conhecidas
+
+- O mapeamento dos campos do fmsave tem correspondências `assumed` (p.ex. "possession won"
+  → recuperações) a confirmar contra o ecrã do FM27.
+- A competição só é conhecida quando a fonte dá o nome da divisão; no save lido pelo
+  fmsave isso não acontece (ver C-3) e o universo junta competições, sempre com aviso.
+- O filtro "País" do pedido não foi incluído: nenhuma fonte atual dá o país da competição
+  do jogador de forma fiável (o save dá ids de nação sem nomes).
+- O módulo de métricas v1 (conflito C-1) continua ativo até ser migrado para o motor novo.
+- Pesquisa em linguagem natural: preparada (pedido JSON validado), não implementada.

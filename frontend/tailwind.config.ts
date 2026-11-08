@@ -25,7 +25,7 @@ export default {
         card: { DEFAULT: hsl("card"), foreground: hsl("card-foreground") },
         attr: { elite: hsl("attr-elite"), good: hsl("attr-good"), mid: hsl("attr-mid"), low: hsl("attr-low") },
         pitch: { DEFAULT: hsl("pitch"), line: hsl("pitch-line") },
-        chart: { 1: hsl("chart-1"), 2: hsl("chart-2"), ref: hsl("chart-ref") },
+        chart: { 1: hsl("chart-1"), 2: hsl("chart-2"), 3: hsl("chart-3"), 4: hsl("chart-4"), ref: hsl("chart-ref") },
       },
       borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
     },

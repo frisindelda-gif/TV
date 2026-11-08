@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { CareerProvider } from "./lib/career";
 import { EvaluationProvider } from "./lib/evaluation";
+import { StatsProvider } from "./stats/context";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <CareerProvider>
         <EvaluationProvider>
-          <App />
+          <StatsProvider>
+            <App />
+          </StatsProvider>
         </EvaluationProvider>
       </CareerProvider>
     </BrowserRouter>

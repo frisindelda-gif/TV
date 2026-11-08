@@ -78,11 +78,34 @@ def eligible_mask(rd: RunStats, u: Universe) -> np.ndarray:
     return m
 
 
+def _partition_index(rd: RunStats, u: Universe):
+    """Chaves de universo + grupos de índices, calculados uma vez por (dados, competição, posição)."""
+    ck = ("__partitions__", u.competition, u.position_level)
+    hit = rd._view_cache.get(ck)
+    if hit is None:
+        parts = partition_keys(rd, u)
+        groups: dict[str, np.ndarray] = {}
+        valid = [i for i, p in enumerate(parts) if p is not None]
+        if valid:
+            keys = parts[valid]
+            order = np.argsort(keys.astype(str), kind="stable")
+            sorted_keys = keys[order].astype(str)
+            uniq, starts = np.unique(sorted_keys, return_index=True)
+            bounds = list(starts) + [len(sorted_keys)]
+            valid_arr = np.array(valid)[order]
+            for j, k in enumerate(uniq):
+                groups[str(k)] = valid_arr[bounds[j]:bounds[j + 1]]
+        hit = (parts, groups)
+        rd._view_cache[ck] = hit
+    return hit
+
+
 def compute(rd: RunStats, catalog: Catalog, key: str, u: Universe) -> PercentileResult:
     metric, _view = catalog.parse_view(key)
     values = rd.view(catalog, key)
-    parts = partition_keys(rd, u)
-    elig = eligible_mask(rd, u) & np.array([p is not None for p in parts], dtype=bool)
+    parts, groups = _partition_index(rd, u)
+    elig_base = eligible_mask(rd, u)
+    elig = elig_base & np.array([p is not None for p in parts], dtype=bool)
     n = rd.n
     pct = np.full(n, np.nan)
     rank = np.full(n, np.nan)
@@ -90,8 +113,10 @@ def compute(rd: RunStats, catalog: Catalog, key: str, u: Universe) -> Percentile
     stats: dict[str, dict] = {}
     if metric.percentile:
         higher = metric.direction == "higher"
-        for k in set(parts[elig].tolist()):
-            idx = np.nonzero(elig & (parts == k))[0]
+        for k, gidx in groups.items():
+            idx = gidx[elig_base[gidx]]
+            if not len(idx):
+                continue
             vals = values[idx]
             ok = ~np.isnan(vals)
             vv = vals[ok]
@@ -109,15 +134,13 @@ def compute(rd: RunStats, catalog: Catalog, key: str, u: Universe) -> Percentile
             size[idx] = N
             if N < u.min_sample:
                 continue
-            s = vv if higher else -vv
-            srt = np.sort(s)
-            left = np.searchsorted(srt, s, "left")
-            right = np.searchsorted(srt, s, "right")
-            p = 100.0 * (left + 0.5 * (right - left)) / N
-            r = N - right + 1  # 1 + nº de jogadores estritamente melhores
+            sv = vv if higher else -vv
+            srt = np.sort(sv)
+            left = np.searchsorted(srt, sv, "left")
+            right = np.searchsorted(srt, sv, "right")
             sel = idx[ok]
-            pct[sel] = p
-            rank[sel] = r
+            pct[sel] = 100.0 * (left + 0.5 * (right - left)) / N
+            rank[sel] = N - right + 1  # 1 + nº de jogadores estritamente melhores
     return PercentileResult(key, values, pct, rank, size, elig, parts, stats)
 
 

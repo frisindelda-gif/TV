@@ -1,4 +1,4 @@
-import { Database, FlaskConical, LayoutDashboard, Moon, Sun, Trophy, Users } from "lucide-react";
+import { BarChart3, Database, FlaskConical, LayoutDashboard, Moon, Sun, Trophy, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBox, SyntheticBadge } from "@/components/common";
@@ -11,6 +11,18 @@ import { cn } from "@/lib/utils";
 import ImportPage from "@/pages/ImportPage";
 import LabPage from "@/pages/LabPage";
 import RankingsPage from "@/pages/RankingsPage";
+import StatsAvailability from "@/stats/pages/Availability";
+import StatsCatalog from "@/stats/pages/Catalog";
+import StatsCompare from "@/stats/pages/Compare";
+import StatsComposites from "@/stats/pages/Composites";
+import StatsFilters from "@/stats/pages/Filters";
+import StatsIdentify from "@/stats/pages/Identify";
+import StatsMarket from "@/stats/pages/Market";
+import StatsOverview from "@/stats/pages/Overview";
+import StatsPercentiles from "@/stats/pages/Percentiles";
+import StatsRankings from "@/stats/pages/Rankings";
+import StatsShortlists from "@/stats/pages/Shortlists";
+import StatsLayout from "@/stats/StatsLayout";
 import OverviewPage from "@/pages/OverviewPage";
 import PlayerPage from "@/pages/PlayerPage";
 import PlayersPage from "@/pages/PlayersPage";
@@ -49,7 +61,8 @@ export default function App() {
           <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
             <NavItem to="/painel" icon={<LayoutDashboard className="size-4" />}>Painel</NavItem>
             <NavItem to="/jogadores" icon={<Users className="size-4" />}>Jogadores</NavItem>
-            <NavItem to="/rankings" icon={<Trophy className="size-4" />}>Rankings</NavItem>
+            <NavItem to="/stats" icon={<BarChart3 className="size-4" />}>Statistical Scouting</NavItem>
+            <NavItem to="/rankings" icon={<Trophy className="size-4" />}>Rankings (atributos)</NavItem>
             <NavItem to="/lab" icon={<FlaskConical className="size-4" />}>Lab</NavItem>
             <NavItem to="/dados" icon={<Database className="size-4" />}>Dados</NavItem>
           </nav>
@@ -98,6 +111,19 @@ export default function App() {
           <Route path="/jogador/:id" element={<PlayerPage />} />
           <Route path="/dados" element={<ImportPage />} />
           <Route path="/rankings" element={<RankingsPage />} />
+          <Route path="/stats" element={<StatsLayout />}>
+            <Route index element={<StatsOverview />} />
+            <Route path="rankings" element={<StatsRankings />} />
+            <Route path="percentiles" element={<StatsPercentiles />} />
+            <Route path="filters" element={<StatsFilters />} />
+            <Route path="identify" element={<StatsIdentify />} />
+            <Route path="compare" element={<StatsCompare />} />
+            <Route path="market" element={<StatsMarket />} />
+            <Route path="shortlists" element={<StatsShortlists />} />
+            <Route path="availability" element={<StatsAvailability />} />
+            <Route path="catalog" element={<StatsCatalog />} />
+            <Route path="composites" element={<StatsComposites />} />
+          </Route>
           <Route path="/lab" element={<LabPage />} />
           <Route path="*" element={<Navigate to="/jogadores" replace />} />
         </Routes>

@@ -77,3 +77,18 @@ Formato curto: contexto → decisão → consequências. Uma decisão só muda c
 
 ## D-15 — numpy para o motor
 - 60 000 jogadores em ~0,6 s; sem numpy seriam dezenas de segundos por recálculo.
+
+## D-16 — Catálogo de métricas no código, sincronizado para a BD
+- Built-in versionado e testado no código; personalizadas (aprovadas) só na BD. A
+  disponibilidade é por importação e nunca remove métricas do catálogo global.
+
+## D-17 — Uma métrica, várias vistas
+- "Golos" e "Golos por 90 minutos" são a mesma métrica com vistas `total` e `p90`: uma só
+  fórmula, sem duplicação; percentagens e rácios não têm vista /90.
+
+## D-18 — Valores derivados e percentis calculados em memória, com cache por importação
+- Guardar todos os valores × universos daria dezenas de milhões de linhas. O cálculo
+  vetorizado de uma importação é rápido e as importações são imutáveis.
+
+## D-19 — Descoberta propõe, nunca adiciona
+- Campos desconhecidos do save geram propostas; só entram no catálogo com aprovação.

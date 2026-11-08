@@ -93,6 +93,7 @@ def test_missing_data_never_satisfies_or_counts_as_zero(api):
     res = api.post("/api/stats/search", json={"conditions": {"op": "and", "conditions": [
         {"metric": "progressive_carries@p90", "min": 0}]}}).json()
     assert res["total"] == 0  # métrica indisponível: ninguém passa, nem com mínimo 0
+    assert any("Conduções progressivas" in n and "indisponível" in n.lower() for n in res["notes"])
     any_player = api.post("/api/stats/search", json={"columns": ["progressive_carries"], "limit": 1}).json()["items"][0]
     assert any_player["metrics"]["progressive_carries"]["value"] is None
 
@@ -163,6 +164,15 @@ def test_composites_crud_and_coverage(api):
     assert all(x["coverage"] < 1 for x in scores if x["coverage"] is not None)  # cobertura visível
     assert api.delete(f"/api/stats/composites/{dup['id']}").status_code == 200
     assert api.delete(f"/api/stats/composites/{b['id']}").status_code == 409
+
+
+def test_identification_by_composite_minimum(api):
+    comps = {c["key"]: c["id"] for c in api.get("/api/stats/composites").json()}
+    cid = comps["st_finisher"]
+    r = api.post("/api/stats/search", json={"filters": {"group": "ST"}, "composite_min": {str(cid): 60},
+                                            "sort": {"by": "composite", "composite_id": cid}, "limit": 200}).json()
+    assert r["total"] > 0 and all(i["composites"][str(cid)]["score"] >= 60 for i in r["items"])
+    assert api.post("/api/stats/search", json={"composite_min": {"99999": 10}}).status_code == 422
 
 
 def test_compare_profile_history(api):

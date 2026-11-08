@@ -34,6 +34,8 @@
     /* Séries de gráficos (validadas: CVD, contraste, banda de luminosidade) */
     --chart-1: 152 62% 30%;
     --chart-2: 199 85% 38%;
+    --chart-3: 29 90% 40%;
+    --chart-4: 262 50% 54%;
     --chart-ref: 215 14% 55%;
   }
   .dark {
@@ -64,6 +66,8 @@
     --pitch-line: 150 25% 25%;
     --chart-1: 152 57% 38%;
     --chart-2: 205 73% 55%;
+    --chart-3: 27 67% 50%;
+    --chart-4: 260 68% 70%;
     --chart-ref: 215 14% 50%;
   }
   * { @apply border-border; }

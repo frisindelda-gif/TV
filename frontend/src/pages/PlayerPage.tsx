@@ -14,6 +14,7 @@ import {
 } from "@/components/common";
 import { EvaluationSection } from "@/components/evaluation/EvaluationSection";
 import { PerformanceCard } from "@/components/Performance";
+import { StatsProfileSection } from "@/stats/ProfileSection";
 import { POSITION_LABEL, PositionPitch } from "@/components/PositionPitch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -239,6 +240,8 @@ export default function PlayerPage() {
           </CardContent>
         </Card>
       </div>
+
+      <StatsProfileSection playerId={p.player_id} runId={viewingOld ? p.provenance.run_id : null} />
 
       <PerformanceCard metrics={p.metrics} connector={p.provenance.connector} />
 

@@ -97,6 +97,7 @@ class SearchRequest(BaseModel):
     sort: SortSpec = Field(default_factory=SortSpec)
     columns: list[str] = Field(default_factory=list, max_length=20)
     composite_ids: list[int] = Field(default_factory=list, max_length=6)
+    composite_min: dict[int, float] = Field(default_factory=dict, description="Score mínimo por Composite (identificação de perfis)")
     limit: int = Field(50, ge=1, le=1000)
     offset: int = Field(0, ge=0)
 
@@ -217,9 +218,14 @@ def run_search(ctx: Ctx, req: SearchRequest) -> dict[str, Any]:
     mask = base_mask(rd, req.filters)
     if req.conditions and req.conditions.conditions:
         mask &= condition_mask(ctx, req.conditions)
-    comp_rows = [ctx.s.get(CompositeScoreDefinition, cid) for cid in req.composite_ids]
-    comp_rows = [c for c in comp_rows if c is not None]
+    ids = list(dict.fromkeys([*req.composite_ids, *req.composite_min]))
+    comp_rows = [ctx.s.get(CompositeScoreDefinition, cid) for cid in ids]
+    if any(c is None for c in comp_rows):
+        raise ValueError("Composite Score desconhecido")
     comp_results = {c.id: ctx.composite(c) for c in comp_rows}
+    for cid, minimum in req.composite_min.items():
+        with np.errstate(invalid="ignore"):
+            mask &= comp_results[cid].score >= minimum  # sem score (cobertura insuficiente) não passa
 
     sort = req.sort
     if sort.by in ("value", "percentile"):
@@ -266,8 +272,31 @@ def run_search(ctx: Ctx, req: SearchRequest) -> dict[str, Any]:
         "run_id": ctx.run.id, "scope": req.scope, "scope_label": SCOPES[req.scope], "total": total, "items": items,
         "universe": ctx.universe.describe(), "universe_summary": summary,
         "composites": [{"id": c.id, "name": c.name, "group": c.group_key} for c in comp_rows],
-        "notes": _notes(ctx, idx),
+        "notes": _notes(ctx, idx) + _unusable_notes(ctx, req),
     }
+
+
+def _condition_metrics(g: ConditionGroup | None) -> list[str]:
+    if g is None:
+        return []
+    out: list[str] = []
+    for c in g.conditions:
+        out += _condition_metrics(c) if isinstance(c, ConditionGroup) else [c.metric]
+    return out
+
+
+def _unusable_notes(ctx: Ctx, req: SearchRequest) -> list[str]:
+    """Avisa quando uma condição/coluna usa uma métrica sem dados neste save."""
+    avail = ctx.availability()
+    notes = []
+    for key in dict.fromkeys(_condition_metrics(req.conditions) + req.columns):
+        mid = key.partition("@")[0]
+        a = avail.get(mid)
+        if a is not None and a.status in ("UNAVAILABLE", "PARTIAL", "INVALID"):
+            estado = {"UNAVAILABLE": "indisponível", "PARTIAL": "parcial", "INVALID": "inválida"}[a.status]
+            notes.append(f"{ctx.cat.view_label(key)}: {estado} neste save — {a.reason} "
+                         "Nenhum jogador pode cumprir uma condição sobre ela.")
+    return notes
 
 
 def _notes(ctx: Ctx, idx: np.ndarray) -> list[str]:
